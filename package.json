@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/telegram-web-app": "^9.0.0",
     "leaflet": "^1.9.4",
     "leaflet-element": "^0.0.22",

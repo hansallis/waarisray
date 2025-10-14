@@ -1,12 +1,24 @@
-// import { LeafletMap } from 'leaflet-element'
-import 'telegram-web-app'
+import 'leaflet-element'
+
+// Types for ambient globals
+declare global {
+    interface Window {
+        testLogin: () => void;
+    }
+}
+
+// Map placeholder to satisfy TypeScript when map features are disabled
+let map: any | undefined;
+
+// Ensure this file is treated as a module so global augmentation is valid
+export {};
 
 // Global variables for map functionality
 // let map = null;
 // let markers = [];
 
 // Wait for DOMContentLoaded before setting up ports
-exports.init = (app) => {
+exports.init = (app: any) => {
     // Wait for app to be ready before setting up ports
     console.log('🚀 Elm app initialized, setting up ports...');
     
@@ -14,7 +26,7 @@ exports.init = (app) => {
     console.log('🔍 Available ports:', Object.keys(app.ports || {}));
     
     // Map functionality - wait for Elm to tell us to initialize
-    app.ports.initMap.subscribe(function(config) {
+    app.ports.initMap.subscribe(function(config: any) {
         console.log('🗺️ Initializing map with config:', config);
         
         // Remove existing map if any

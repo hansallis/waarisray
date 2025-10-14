@@ -15,18 +15,34 @@ import Types exposing (..)
 import Url
 
 
+
 -- PORTS
 
+
 port initMap : { center : Location, zoom : Int } -> Cmd msg
+
+
 port mapClicked : (Location -> msg) -> Sub msg
+
+
 port setMapCenter : { center : Location, zoom : Int } -> Cmd msg
+
+
 port addMarker : { location : Location, color : String, label : String } -> Cmd msg
+
+
 port clearMarkers : () -> Cmd msg
+
+
 port authenticateWithTelegram : () -> Cmd msg
+
+
 port telegramAuthResult : (String -> msg) -> Sub msg
 
 
+
 -- MODEL
+
 
 type alias Model =
     FrontendModel
@@ -65,7 +81,9 @@ init url key =
     )
 
 
+
 -- UPDATE
+
 
 update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
 update msg model =
@@ -83,13 +101,15 @@ update msg model =
 
         InitiateTelegramAuth ->
             let
-                _ = Debug.log "🔵 InitiateTelegramAuth clicked!" ()
+                _ =
+                    Debug.log "🔵 InitiateTelegramAuth clicked!" ()
             in
             ( model, authenticateWithTelegram () )
 
         TelegramAuthResult (Ok authData) ->
             let
-                _ = Debug.log "🟢 TelegramAuthResult received:" authData
+                _ =
+                    Debug.log "🟢 TelegramAuthResult received:" authData
             in
             ( { model | authData = Just authData }
             , Lamdera.sendToBackend (AuthenticateWithTelegram authData)
@@ -102,7 +122,8 @@ update msg model =
 
         Logout ->
             let
-                _ = Debug.log "🚪 Logout clicked" ()
+                _ =
+                    Debug.log "🚪 Logout clicked" ()
             in
             ( { model | currentUser = Nothing, page = LoginPage, error = Nothing }
             , Lamdera.sendToBackend LogoutUser
@@ -110,7 +131,8 @@ update msg model =
 
         LoginAsRay ->
             let
-                _ = Debug.log "👑 Login as Ray clicked" ()
+                _ =
+                    Debug.log "👑 Login as Ray clicked" ()
             in
             ( model
             , Lamdera.sendToBackend AuthenticateAsRay
@@ -118,7 +140,8 @@ update msg model =
 
         LoginAsRegularUser ->
             let
-                _ = Debug.log "👤 Login as Regular User clicked" ()
+                _ =
+                    Debug.log "👤 Login as Regular User clicked" ()
             in
             ( model
             , Lamdera.sendToBackend AuthenticateAsRegularUser
@@ -135,11 +158,13 @@ update msg model =
                         ( model
                         , Lamdera.sendToBackend (CreateNewRound location)
                         )
+
                     else if not user.isRay && model.userGuess == Nothing then
                         -- Regular user making a guess
                         ( { model | userGuess = Just location }
                         , addMarker { location = location, color = "blue", label = "Your Guess" }
                         )
+
                     else
                         ( model, Cmd.none )
 
@@ -158,6 +183,7 @@ update msg model =
                             , setMapCenter { center = initialLocation, zoom = 2 }
                             ]
                         )
+
                     else
                         ( model, Cmd.none )
 
@@ -165,12 +191,13 @@ update msg model =
                     ( model, Cmd.none )
 
         SubmitGuess ->
-            case (model.currentUser, model.userGuess) of
-                (Just user, Just guess) ->
+            case ( model.currentUser, model.userGuess ) of
+                ( Just user, Just guess ) ->
                     if not user.isRay then
                         ( model
                         , Lamdera.sendToBackend (SubmitUserGuess guess)
                         )
+
                     else
                         ( model, Cmd.none )
 
@@ -184,6 +211,7 @@ update msg model =
                         ( model
                         , Lamdera.sendToBackend EndCurrentRound
                         )
+
                     else
                         ( model, Cmd.none )
 
@@ -209,6 +237,7 @@ update msg model =
             ( { model | showingGuesses = not model.showingGuesses }
             , if model.showingGuesses then
                 clearMarkers ()
+
               else
                 showAllGuesses model
             )
@@ -237,24 +266,28 @@ updateFromBackend msg model =
 
         GameStateUpdate { currentUser, currentRound, pastRounds } ->
             let
-                _ = Debug.log "🔄 GameStateUpdate received" 
-                    { currentUser = Maybe.map (.telegramUser >> .firstName) currentUser
-                    , currentPage = model.page
-                    , hasCurrentRound = currentRound /= Nothing
-                    }
+                _ =
+                    Debug.log "🔄 GameStateUpdate received"
+                        { currentUser = Maybe.map (.telegramUser >> .firstName) currentUser
+                        , currentPage = model.page
+                        , hasCurrentRound = currentRound /= Nothing
+                        }
 
                 -- If we receive a currentUser and we're on login page, go to game page
-                newPage = 
-                    case (currentUser, model.page) of
-                        (Just _, LoginPage) -> GamePage
-                        _ -> model.page
+                newPage =
+                    case ( currentUser, model.page ) of
+                        ( Just _, LoginPage ) ->
+                            GamePage
+
+                        _ ->
+                            model.page
 
                 newModel =
-                    { model 
-                    | currentUser = currentUser
-                    , currentRound = currentRound
-                    , pastRounds = pastRounds
-                    , page = newPage
+                    { model
+                        | currentUser = currentUser
+                        , currentRound = currentRound
+                        , pastRounds = pastRounds
+                        , page = newPage
                     }
             in
             ( newModel
@@ -278,10 +311,12 @@ updateFromBackend msg model =
                         ( { model | userGuess = Just location }
                         , Cmd.none
                         )
+
                     else if model.showingGuesses then
                         ( model
                         , addMarker { location = location, color = "red", label = "Other Guess" }
                         )
+
                     else
                         ( model, Cmd.none )
 
@@ -299,7 +334,9 @@ updateFromBackend msg model =
             )
 
 
+
 -- HELPER FUNCTIONS
+
 
 showAllGuesses : Model -> Cmd FrontendMsg
 showAllGuesses model =
@@ -309,13 +346,14 @@ showAllGuesses model =
                 guessMarkers =
                     round.guesses
                         |> Dict.values
-                        |> List.map (\guess ->
-                            addMarker 
-                                { location = guess.location
-                                , color = "red"
-                                , label = "Guess"
-                                }
-                        )
+                        |> List.map
+                            (\guess ->
+                                addMarker
+                                    { location = guess.location
+                                    , color = "red"
+                                    , label = "Guess"
+                                    }
+                            )
             in
             Cmd.batch guessMarkers
 
@@ -326,12 +364,14 @@ showAllGuesses model =
 updateMapForRound : Model -> Round -> Cmd FrontendMsg
 updateMapForRound model round =
     let
-        commands = []
-        
+        commands =
+            []
+
         userGuessCmd =
             case model.userGuess of
                 Just location ->
                     [ addMarker { location = location, color = "blue", label = "Your Guess" } ]
+
                 Nothing ->
                     []
 
@@ -342,21 +382,25 @@ updateMapForRound model round =
                         round.guesses
                             |> Dict.filter (\userId _ -> userId /= user.telegramUser.id)
                             |> Dict.values
-                            |> List.map (\guess ->
-                                addMarker 
-                                    { location = guess.location
-                                    , color = "red"
-                                    , label = "Other Guess"
-                                }
-                            )
+                            |> List.map
+                                (\guess ->
+                                    addMarker
+                                        { location = guess.location
+                                        , color = "red"
+                                        , label = "Other Guess"
+                                        }
+                                )
+
                     Nothing ->
                         []
+
             else
                 []
 
         actualLocationCmd =
             if not round.isOpen then
                 [ addMarker { location = round.actualLocation, color = "green", label = "Ray's Location" } ]
+
             else
                 []
     in
@@ -372,33 +416,42 @@ updateMapForClosedRound model round =
         guessMarkers =
             round.guesses
                 |> Dict.values
-                |> List.map (\guess ->
-                    let
-                        color = 
-                            case model.currentUser of
-                                Just user ->
-                                    if guess.userId == user.telegramUser.id then "blue" else "red"
-                                Nothing ->
-                                    "red"
-                        
-                        distanceText =
-                            case guess.distanceKm of
-                                Just dist ->
-                                    " (" ++ String.fromInt (Basics.round dist) ++ "km)"
-                                Nothing ->
-                                    ""
-                    in
-                    addMarker 
-                        { location = guess.location
-                        , color = color
-                        , label = "Guess" ++ distanceText
-                        }
-                )
+                |> List.map
+                    (\guess ->
+                        let
+                            color =
+                                case model.currentUser of
+                                    Just user ->
+                                        if guess.userId == user.telegramUser.id then
+                                            "blue"
+
+                                        else
+                                            "red"
+
+                                    Nothing ->
+                                        "red"
+
+                            distanceText =
+                                case guess.distanceKm of
+                                    Just dist ->
+                                        " (" ++ String.fromInt (Basics.round dist) ++ "km)"
+
+                                    Nothing ->
+                                        ""
+                        in
+                        addMarker
+                            { location = guess.location
+                            , color = color
+                            , label = "Guess" ++ distanceText
+                            }
+                    )
     in
     Cmd.batch (actualLocationCmd :: guessMarkers)
 
 
+
 -- SUBSCRIPTIONS
+
 
 subscriptions : Model -> Sub FrontendMsg
 subscriptions model =
@@ -408,7 +461,9 @@ subscriptions model =
         ]
 
 
+
 -- VIEW
+
 
 view : Model -> Browser.Document FrontendMsg
 view model =
@@ -435,27 +490,29 @@ viewHeader model =
                         [ span [] [ text ("Welcome, " ++ user.telegramUser.firstName) ]
                         , if user.isRay then
                             span [ class "ray-badge" ] [ text "Pilot" ]
+
                           else
                             text ""
                         , button [ class "logout-btn", onClick Logout ] [ text "Logout" ]
                         ]
-                
+
                 Nothing ->
                     text ""
             , case model.currentUser of
                 Just _ ->
                     div [ class "nav-buttons" ]
-                        [ button 
+                        [ button
                             [ onClick GoToGame
-                            , classList [ ("active", model.page == GamePage) ]
-                            ] 
+                            , classList [ ( "active", model.page == GamePage ) ]
+                            ]
                             [ text "Game" ]
-                        , button 
+                        , button
                             [ onClick GoToHistory
-                            , classList [ ("active", model.page == HistoryPage) ]
-                            ] 
+                            , classList [ ( "active", model.page == HistoryPage ) ]
+                            ]
                             [ text "History" ]
                         ]
+
                 Nothing ->
                     text ""
             ]
@@ -497,23 +554,23 @@ viewLoginPage =
         [ div [ class "login-container" ]
             [ h2 [] [ text "Login with Telegram" ]
             , p [] [ text "Authenticate using Telegram to start guessing Ray's location!" ]
-            , button 
+            , button
                 [ class "telegram-login-btn"
-                , onClick InitiateTelegramAuth 
-                ] 
+                , onClick InitiateTelegramAuth
+                ]
                 [ text "Login with Telegram" ]
             , div [ class "test-login-section" ]
                 [ h3 [] [ text "Development Testing" ]
                 , p [] [ text "Quick login buttons for testing:" ]
-                , button 
+                , button
                     [ class "test-login-btn ray-btn"
-                    , onClick LoginAsRay 
-                    ] 
+                    , onClick LoginAsRay
+                    ]
                     [ text "Login as Ray (Pilot) ✈️" ]
-                , button 
+                , button
                     [ class "test-login-btn user-btn"
-                    , onClick LoginAsRegularUser 
-                    ] 
+                    , onClick LoginAsRegularUser
+                    ]
                     [ text "Login as Regular User 👤" ]
                 ]
             ]
@@ -539,6 +596,7 @@ viewGameControls model user =
     div [ class "game-controls" ]
         [ if user.isRay then
             viewRayControls model
+
           else
             viewPlayerControls model
         ]
@@ -562,6 +620,7 @@ viewRayControls model =
                     , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
                     , button [ onClick CloseRound ] [ text "Close Round" ]
                     ]
+
             else
                 div []
                     [ h3 [] [ text "Round completed" ]
@@ -594,8 +653,16 @@ viewPlayerControls model =
                             , button [ onClick SubmitGuess ] [ text "Confirm Guess" ]
                             , p [] [ text ("Other players have made " ++ String.fromInt (Dict.size round.guesses) ++ " guesses") ]
                             , button [ onClick ToggleGuessesVisibility ]
-                                [ text (if model.showingGuesses then "Hide Other Guesses" else "Show Other Guesses") ]
+                                [ text
+                                    (if model.showingGuesses then
+                                        "Hide Other Guesses"
+
+                                     else
+                                        "Show Other Guesses"
+                                    )
+                                ]
                             ]
+
             else
                 div []
                     [ h3 [] [ text "Round completed!" ]
@@ -609,11 +676,12 @@ viewGameStatus model user =
         Just round ->
             div [ class "game-status" ]
                 [ h4 [] [ text "Round Status" ]
-                , p [] [ text ("Created by: Ray") ]
+                , p [] [ text "Created by: Ray" ]
                 , p [] [ text ("Started: " ++ formatTime round.startTime) ]
                 , case round.endTime of
                     Just endTime ->
                         p [] [ text ("Ended: " ++ formatTime endTime) ]
+
                     Nothing ->
                         p [] [ text "Status: Open" ]
                 , p [] [ text ("Total guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
@@ -625,13 +693,28 @@ viewGameStatus model user =
 
 viewMap : Html FrontendMsg
 viewMap =
-    node "leaflet-map" [] []
+    node "leaflet-map"
+        [ on "click" clickDecoder, property "worldCopyJump" (Encode.bool True), attribute "zoom" "3", attribute "min-zoom" "3", attribute "max-zoom" "10" ]
+        [ node "leaflet-scale-control" [ attribute "position" "bottomright", attribute "metric" "metric" ] []
+        , node "leaflet-marker"
+            [ attribute "latitude" "51.5", attribute "longitude" "-0.09", attribute "title" "Popup Demo" ]
+            [ b [] [ text "Bold" ], p [] [ text "Text" ] ]
+        ]
+
+
+clickDecoder : Decode.Decoder FrontendMsg
+clickDecoder =
+    Decode.map2
+        Location
+        (Decode.at [ "detail", "latlng", "lat" ] Decode.float)
+        (Decode.at [ "detail", "latlng", "lng" ] Decode.float)
+        |> Decode.map MapClicked
 
 
 viewResultsPage : Model -> String -> Html FrontendMsg
 viewResultsPage model roundId =
     let
-        round = 
+        round =
             model.pastRounds
                 |> List.filter (\r -> r.id == roundId)
                 |> List.head
@@ -657,6 +740,7 @@ viewHistoryPage model =
         [ h2 [] [ text "Previous Rounds" ]
         , if List.isEmpty model.pastRounds then
             p [] [ text "No previous rounds yet." ]
+
           else
             div [ class "rounds-list" ]
                 (model.pastRounds
@@ -673,6 +757,7 @@ viewRoundSummary round =
         , case round.endTime of
             Just endTime ->
                 p [] [ text ("Ended: " ++ formatTime endTime) ]
+
             Nothing ->
                 text ""
         , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
@@ -692,24 +777,30 @@ viewRoundResults round =
         [ h4 [] [ text "Results" ]
         , div [ class "results-list" ]
             (sortedGuesses
-                |> List.indexedMap (\index guess ->
-                    div [ class "result-item" ]
-                        [ span [ class "rank" ] [ text (String.fromInt (index + 1) ++ ".") ]
-                        , span [ class "user" ] [ text ("User " ++ String.fromInt guess.userId) ]
-                        , span [ class "distance" ] 
-                                                         [ text 
-                                 (case guess.distanceKm of
-                                     Just dist -> String.fromInt (Basics.round dist) ++ " km"
-                                     Nothing -> "Calculating..."
-                                 )
+                |> List.indexedMap
+                    (\index guess ->
+                        div [ class "result-item" ]
+                            [ span [ class "rank" ] [ text (String.fromInt (index + 1) ++ ".") ]
+                            , span [ class "user" ] [ text ("User " ++ String.fromInt guess.userId) ]
+                            , span [ class "distance" ]
+                                [ text
+                                    (case guess.distanceKm of
+                                        Just dist ->
+                                            String.fromInt (Basics.round dist) ++ " km"
+
+                                        Nothing ->
+                                            "Calculating..."
+                                    )
+                                ]
                             ]
-                        ]
-                )
+                    )
             )
         ]
 
 
+
 -- HELPER FUNCTIONS
+
 
 formatTime : Time.Posix -> String
 formatTime time =
@@ -717,15 +808,16 @@ formatTime time =
     String.fromInt (Time.posixToMillis time)
 
 
+
 -- TELEGRAM AUTH
 -- (Ports moved to top of file)
-
-
 -- STYLES
+
 
 viewStyles : Html msg
 viewStyles =
-    node "style" []
+    node "style"
+        []
         [ text """
             * { margin: 0; padding: 0; box-sizing: border-box; }
             
