@@ -1,0 +1,138 @@
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+<!-- Leaflet JavaScript -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Telegram Web App Script -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .map {
+        height: 100%;
+        width: 100%;
+    }
+    
+    .leaflet-popup-content {
+        font-family: inherit;
+    }
+    
+    .distance-popup {
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .guess-marker {
+        background: #3498db;
+        color: white;
+        border: 2px solid white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .ray-marker {
+        background: #e74c3c;
+        color: white;
+        border: 2px solid white;
+        border-radius: 50%;
+        width: 25px;
+        height: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+    }
+    
+    .other-guess-marker {
+        background: #95a5a6;
+        color: white;
+        border: 2px solid white;
+        border-radius: 50%;
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: bold;
+    }
+    
+    /* Test login and logout buttons */
+    .test-login-section {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid #eee;
+    }
+    
+    .test-login-section h3 {
+        color: #666;
+        margin-bottom: 0.5rem;
+    }
+    
+    .test-login-section p {
+        color: #888;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    
+    .test-login-btn {
+        background: #95a5a6;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        margin: 0.25rem;
+        transition: background 0.2s;
+        display: block;
+        width: 100%;
+    }
+    
+    .ray-btn {
+        background: #e74c3c;
+    }
+    
+    .ray-btn:hover {
+        background: #c0392b;
+    }
+    
+    .user-btn {
+        background: #3498db;
+    }
+    
+    .user-btn:hover {
+        background: #2980b9;
+    }
+    
+    .logout-btn {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-left: 1rem;
+        transition: background 0.2s;
+    }
+    
+    .logout-btn:hover {
+        background: #c0392b;
+    }
+</style>

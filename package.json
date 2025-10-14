@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@types/telegram-web-app": "^9.0.0",
+    "leaflet": "^1.9.4",
+    "leaflet-element": "^0.0.22",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.9.2",
+    "webpack": "^5.101.0"
+  },
+  "devDependencies": {
+    "webpack-cli": "^6.0.1"
+  }
+}
