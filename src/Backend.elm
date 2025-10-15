@@ -1,17 +1,19 @@
 module Backend exposing (..)
 
-import Dict exposing (Dict)
-import Http
+import Crypto.HMAC exposing (digest, sha256)
+import Dict
+import Env
 import Json.Decode as Decode
-import Json.Encode as Encode
 import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
-import Random
 import Task
 import Time
 import Types exposing (..)
+import Word.Hex as Hex
+
 
 
 -- MODEL
+
 
 type alias Model =
     BackendModel
@@ -38,7 +40,9 @@ init =
     )
 
 
+
 -- UPDATE
+
 
 update : BackendMsg -> Model -> ( Model, Cmd BackendMsg )
 update msg model =
@@ -64,10 +68,12 @@ update msg model =
                     case Dict.get sessionId model.sessionClients of
                         Just clients ->
                             let
-                                remaining = List.filter ((/=) clientId) clients
+                                remaining =
+                                    List.filter ((/=) clientId) clients
                             in
                             if List.isEmpty remaining then
                                 Dict.remove sessionId model.sessionClients
+
                             else
                                 Dict.insert sessionId remaining model.sessionClients
 
@@ -108,39 +114,43 @@ updateFromFrontend sessionId clientId msg model =
             handleRequestRoundHistory sessionId clientId model
 
 
+
 -- AUTHENTICATION
 
+
 handleTelegramAuth : SessionId -> ClientId -> String -> Model -> ( Model, Cmd BackendMsg )
-handleTelegramAuth sessionId clientId authData model =
-    case decodeTelegramAuth authData of
+handleTelegramAuth sessionId clientId initData model =
+    case verifyTelegramAuth initData of
         Ok telegramUser ->
             let
-                -- Ray's Telegram ID - you'll need to replace this with Ray's actual ID
-                rayTelegramId = 123456789  -- Replace with Ray's actual Telegram ID
-
                 user =
                     { telegramUser = telegramUser
-                    , isRay = telegramUser.id == rayTelegramId
+                    , isRay = telegramUser.id == Env.appConfig.rayTelegramId
                     }
 
                 newModel =
                     { model
-                    | users = Dict.insert telegramUser.id user model.users
-                    , userSessions = Dict.insert sessionId telegramUser.id model.userSessions
+                        | users = Dict.insert telegramUser.id user model.users
+                        , userSessions = Dict.insert sessionId telegramUser.id model.userSessions
                     }
-                
-                _ = Debug.log "✅ Authentication Success" 
-                    { sessionId = sessionId
-                    , userId = telegramUser.id
-                    , userName = telegramUser.firstName
-                    , isRay = user.isRay
-                    }
+
+                _ =
+                    Debug.log "✅ Authentication Success (Verified)"
+                        { sessionId = sessionId
+                        , userId = telegramUser.id
+                        , userName = telegramUser.firstName
+                        , isRay = user.isRay
+                        }
             in
             ( newModel
             , sendToFrontend clientId (AuthenticationResult (Ok user))
             )
 
         Err error ->
+            let
+                _ =
+                    Debug.log "❌ Authentication Failed" error
+            in
             ( model
             , sendToFrontend clientId (AuthenticationResult (Err error))
             )
@@ -149,11 +159,12 @@ handleTelegramAuth sessionId clientId authData model =
 handleLogout : SessionId -> ClientId -> Model -> ( Model, Cmd BackendMsg )
 handleLogout sessionId clientId model =
     let
-        _ = Debug.log "🚪 Logout" { sessionId = sessionId }
-        
+        _ =
+            Debug.log "🚪 Logout" { sessionId = sessionId }
+
         newModel =
             { model | userSessions = Dict.remove sessionId model.userSessions }
-            
+
         gameState =
             { currentUser = Nothing
             , currentRound = Nothing
@@ -170,8 +181,8 @@ handleTestAuth sessionId clientId isRay model =
     let
         testUser =
             if isRay then
-                { telegramUser = 
-                    { id = 123456789  -- Ray's test ID
+                { telegramUser =
+                    { id = Env.appConfig.rayTelegramId
                     , firstName = "Ray"
                     , lastName = Just "Pilot"
                     , username = Just "raypilot"
@@ -179,9 +190,10 @@ handleTestAuth sessionId clientId isRay model =
                     }
                 , isRay = True
                 }
+
             else
-                { telegramUser = 
-                    { id = 987654321  -- Regular user test ID
+                { telegramUser =
+                    { id = 987654321 -- Regular user test ID
                     , firstName = "Test"
                     , lastName = Just "User"
                     , username = Just "testuser"
@@ -192,34 +204,151 @@ handleTestAuth sessionId clientId isRay model =
 
         newModel =
             { model
-            | users = Dict.insert testUser.telegramUser.id testUser model.users
-            , userSessions = Dict.insert sessionId testUser.telegramUser.id model.userSessions
+                | users = Dict.insert testUser.telegramUser.id testUser model.users
+                , userSessions = Dict.insert sessionId testUser.telegramUser.id model.userSessions
             }
-        
-        _ = Debug.log "🧪 Test Authentication" 
-            { sessionId = sessionId
-            , userId = testUser.telegramUser.id
-            , userName = testUser.telegramUser.firstName
-            , isRay = testUser.isRay
-            }
+
+        _ =
+            Debug.log "🧪 Test Authentication"
+                { sessionId = sessionId
+                , userId = testUser.telegramUser.id
+                , userName = testUser.telegramUser.firstName
+                , isRay = testUser.isRay
+                }
     in
     ( newModel
     , sendToFrontend clientId (AuthenticationResult (Ok testUser))
     )
 
 
-decodeTelegramAuth : String -> Result String TelegramUser
-decodeTelegramAuth authData =
-    -- In a real implementation, you would validate the Telegram auth data
-    -- using the bot token and check the hash. For now, we'll decode the basic data.
-    case Decode.decodeString telegramUserDecoder authData of
-        Ok user ->
-            Ok user
-        Err _ ->
-            Err "Invalid authentication data"
+
+-- Verify Telegram Web App initData
+
+
+verifyTelegramAuth : String -> Result String TelegramUser
+verifyTelegramAuth initData =
+    let
+        -- Parse the query string into key-value pairs
+        pairs =
+            parseQueryString (initData |> Debug.log "initData")
+                |> Debug.log "pairs"
+
+        -- Extract the hash
+        hash =
+            pairs
+                |> List.filter (\( k, _ ) -> k == "hash")
+                |> List.head
+                |> Maybe.map Tuple.second
+
+        -- Get all parameters except hash
+        dataCheckPairs =
+            pairs
+                |> List.filter (\( k, _ ) -> k /= "hash")
+                |> List.sortBy Tuple.first
+
+        -- Create data check string (key=value pairs joined with newlines)
+        dataCheckString =
+            dataCheckPairs
+                |> List.map (\( k, v ) -> k ++ "=" ++ v)
+                |> String.join "\n"
+    in
+    case hash |> Debug.log "received hash" of
+        Nothing ->
+            Err "Missing hash parameter"
+
+        Just hashValue ->
+            -- Verify the hash
+            if verifyHash dataCheckString hashValue then
+                -- Extract user data from the user parameter
+                pairs
+                    |> List.filter (\( k, _ ) -> k == "user")
+                    |> List.head
+                    |> Maybe.map Tuple.second
+                    |> Maybe.andThen
+                        (\userJson ->
+                            case Decode.decodeString telegramUserDecoder userJson of
+                                Ok user ->
+                                    Just user
+
+                                Err _ ->
+                                    Nothing
+                        )
+                    |> Result.fromMaybe "Failed to decode user data"
+
+            else
+                Err "Invalid hash - authentication failed"
+
+
+
+-- Parse a query string into key-value pairs
+
+
+parseQueryString : String -> List ( String, String )
+parseQueryString query =
+    query
+        |> String.split "&"
+        |> List.filterMap
+            (\pair ->
+                case String.split "=" pair of
+                    [ key, value ] ->
+                        Just ( urlDecode key, urlDecode value )
+
+                    _ ->
+                        Nothing
+            )
+
+
+
+-- Simple URL decoding (handles basic cases)
+
+
+urlDecode : String -> String
+urlDecode str =
+    str
+        |> String.replace "+" " "
+        |> urlDecodePercent
+
+
+
+-- Decode percent-encoded characters
+
+
+urlDecodePercent : String -> String
+urlDecodePercent str =
+    -- This is a simplified implementation
+    -- In production, use a proper URL decoding library
+    str
+        |> String.replace "%20" " "
+        |> String.replace "%22" "\""
+        |> String.replace "%7B" "{"
+        |> String.replace "%7D" "}"
+        |> String.replace "%3A" ":"
+        |> String.replace "%2C" ","
+
+
+
+-- Verify the hash using HMAC-SHA256
+
+
+verifyHash : String -> String -> Bool
+verifyHash dataCheckString providedHash =
+    let
+        -- Step 1: Create secret_key = HMAC_SHA256(bot_token, "WebAppData")
+        secretKey =
+            digest sha256 "WebAppData" Env.telegramConfig.botToken
+                |> Debug.log "secret key"
+
+        -- Step 2: Create hash = HMAC_SHA256(secret_key, data_check_string)
+        calculatedHash =
+            digest sha256 secretKey (dataCheckString |> Debug.log "dataCheckString")
+    in
+    -- Compare the calculated hash with the provided hash (case-insensitive)
+    String.toLower calculatedHash == String.toLower providedHash
+
 
 
 -- ROUND MANAGEMENT
+
 
 handleCreateNewRound : SessionId -> ClientId -> Location -> Model -> ( Model, Cmd BackendMsg )
 handleCreateNewRound sessionId clientId location model =
@@ -227,13 +356,14 @@ handleCreateNewRound sessionId clientId location model =
         Just user ->
             if user.isRay then
                 let
-                    roundId = generateRoundId ()
-                    
+                    roundId =
+                        generateRoundId ()
+
                     newRound =
                         { id = roundId
                         , createdBy = user.telegramUser.id
                         , actualLocation = location
-                        , startTime = Time.millisToPosix 0  -- Will be set properly with Time.now
+                        , startTime = Time.millisToPosix 0 -- Will be set properly with Time.now
                         , endTime = Nothing
                         , guesses = Dict.empty
                         , isOpen = True
@@ -241,8 +371,8 @@ handleCreateNewRound sessionId clientId location model =
 
                     newModel =
                         { model
-                        | rounds = Dict.insert roundId newRound model.rounds
-                        , currentRoundId = Just roundId
+                            | rounds = Dict.insert roundId newRound model.rounds
+                            , currentRoundId = Just roundId
                         }
                 in
                 ( newModel
@@ -251,6 +381,7 @@ handleCreateNewRound sessionId clientId location model =
                     , broadcastRoundCreated newRound model
                     ]
                 )
+
             else
                 ( model
                 , sendToFrontend clientId (ErrorMessage "Only Ray can create rounds")
@@ -264,12 +395,13 @@ handleCreateNewRound sessionId clientId location model =
 
 handleSubmitGuess : SessionId -> ClientId -> Location -> Model -> ( Model, Cmd BackendMsg )
 handleSubmitGuess sessionId clientId location model =
-    case (getUserFromSession sessionId model, model.currentRoundId) of
-        (Just user, Just roundId) ->
+    case ( getUserFromSession sessionId model, model.currentRoundId ) of
+        ( Just user, Just roundId ) ->
             if user.isRay then
                 ( model
                 , sendToFrontend clientId (ErrorMessage "Ray cannot submit guesses")
                 )
+
             else
                 case Dict.get roundId model.rounds of
                     Just round ->
@@ -278,13 +410,14 @@ handleSubmitGuess sessionId clientId location model =
                                 ( model
                                 , sendToFrontend clientId (ErrorMessage "You have already submitted a guess for this round")
                                 )
+
                             else
                                 let
                                     guess =
                                         { userId = user.telegramUser.id
                                         , location = location
-                                        , timestamp = Time.millisToPosix 0  -- Will be set properly
-                                        , distanceKm = Nothing  -- Calculated when round closes
+                                        , timestamp = Time.millisToPosix 0 -- Will be set properly
+                                        , distanceKm = Nothing -- Calculated when round closes
                                         }
 
                                     updatedRound =
@@ -296,6 +429,7 @@ handleSubmitGuess sessionId clientId location model =
                                 ( newModel
                                 , broadcastGuessSubmitted user.telegramUser.id location model
                                 )
+
                         else
                             ( model
                             , sendToFrontend clientId (ErrorMessage "This round is closed")
@@ -306,12 +440,12 @@ handleSubmitGuess sessionId clientId location model =
                         , sendToFrontend clientId (ErrorMessage "Round not found")
                         )
 
-        (Nothing, _) ->
+        ( Nothing, _ ) ->
             ( model
             , sendToFrontend clientId (ErrorMessage "Authentication required")
             )
 
-        (_, Nothing) ->
+        ( _, Nothing ) ->
             ( model
             , sendToFrontend clientId (ErrorMessage "No active round")
             )
@@ -319,8 +453,8 @@ handleSubmitGuess sessionId clientId location model =
 
 handleEndRound : SessionId -> ClientId -> Model -> ( Model, Cmd BackendMsg )
 handleEndRound sessionId clientId model =
-    case (getUserFromSession sessionId model, model.currentRoundId) of
-        (Just user, Just roundId) ->
+    case ( getUserFromSession sessionId model, model.currentRoundId ) of
+        ( Just user, Just roundId ) ->
             if user.isRay then
                 case Dict.get roundId model.rounds of
                     Just round ->
@@ -328,23 +462,24 @@ handleEndRound sessionId clientId model =
                             -- Calculate distances for all guesses
                             updatedGuesses =
                                 round.guesses
-                                    |> Dict.map (\_ guess ->
-                                        { guess 
-                                        | distanceKm = Just (calculateDistance guess.location round.actualLocation)
-                                        }
-                                    )
+                                    |> Dict.map
+                                        (\_ guess ->
+                                            { guess
+                                                | distanceKm = Just (calculateDistance guess.location round.actualLocation)
+                                            }
+                                        )
 
                             closedRound =
                                 { round
-                                | isOpen = False
-                                , endTime = Just (Time.millisToPosix 0)  -- Will be set properly
-                                , guesses = updatedGuesses
+                                    | isOpen = False
+                                    , endTime = Just (Time.millisToPosix 0) -- Will be set properly
+                                    , guesses = updatedGuesses
                                 }
 
                             newModel =
                                 { model
-                                | rounds = Dict.insert roundId closedRound model.rounds
-                                , currentRoundId = Nothing
+                                    | rounds = Dict.insert roundId closedRound model.rounds
+                                    , currentRoundId = Nothing
                                 }
                         in
                         ( newModel
@@ -355,48 +490,51 @@ handleEndRound sessionId clientId model =
                         ( model
                         , sendToFrontend clientId (ErrorMessage "Round not found")
                         )
+
             else
                 ( model
                 , sendToFrontend clientId (ErrorMessage "Only Ray can end rounds")
                 )
 
-        (Nothing, _) ->
+        ( Nothing, _ ) ->
             ( model
             , sendToFrontend clientId (ErrorMessage "Authentication required")
             )
 
-        (_, Nothing) ->
+        ( _, Nothing ) ->
             ( model
             , sendToFrontend clientId (ErrorMessage "No active round")
             )
 
 
+
 -- GAME STATE
+
 
 handleRequestGameState : SessionId -> ClientId -> Model -> ( Model, Cmd BackendMsg )
 handleRequestGameState sessionId clientId model =
     let
-        currentUser = getUserFromSession sessionId model
-        
-        _ = Debug.log "🔍 RequestGameState" 
-            { sessionId = sessionId
-            , currentUser = Maybe.map (.telegramUser >> .firstName) currentUser
-            , userSessions = Dict.keys model.userSessions
-            }
-        
+        currentUser =
+            getUserFromSession sessionId model
+
+        _ =
+            Debug.log "🔍 RequestGameState"
+                { sessionId = sessionId
+                , currentUser = Maybe.map (.telegramUser >> .firstName) currentUser
+                , userSessions = Dict.keys model.userSessions
+                }
+
         currentRound =
-            case model.currentRoundId of
-                Just roundId ->
-                    Dict.get roundId model.rounds
-                Nothing ->
-                    Nothing
+            model.currentRoundId
+                |> Maybe.andThen (\roundId -> Dict.get roundId model.rounds)
 
         pastRounds =
             model.rounds
                 |> Dict.values
                 |> List.filter (not << .isOpen)
-                |> List.sortBy (.startTime >> Time.posixToMillis >> negate)  -- Most recent first
+                |> List.sortBy (.startTime >> Time.posixToMillis >> negate)
 
+        -- Most recent first
         gameState =
             { currentUser = currentUser
             , currentRound = currentRound
@@ -417,7 +555,8 @@ handleRequestRoundHistory sessionId clientId model =
                 |> List.filter (not << .isOpen)
                 |> List.sortBy (.startTime >> Time.posixToMillis >> negate)
 
-        currentUser = getUserFromSession sessionId model
+        currentUser =
+            getUserFromSession sessionId model
 
         gameState =
             { currentUser = currentUser
@@ -430,7 +569,9 @@ handleRequestRoundHistory sessionId clientId model =
     )
 
 
+
 -- BROADCASTING
+
 
 broadcastRoundCreated : Round -> Model -> Cmd BackendMsg
 broadcastRoundCreated round model =
@@ -474,7 +615,9 @@ broadcastRoundClosed round model =
     Cmd.batch (List.map send allClientIds)
 
 
+
 -- HELPER FUNCTIONS
+
 
 getUserFromSession : SessionId -> Model -> Maybe User
 getUserFromSession sessionId model =
@@ -490,18 +633,8 @@ generateRoundId _ =
 
 
 subscriptions : Model -> Sub BackendMsg
-subscriptions model =
+subscriptions _ =
     Sub.batch
         [ onConnect Connected
         , onDisconnect Disconnected
         ]
-
-
--- CONFIGURATION
-
--- Ray's Telegram Configuration
--- You'll need to update this with Ray's actual Telegram ID
-rayConfig : { telegramId : Int }
-rayConfig =
-    { telegramId = 123456789  -- Replace with Ray's actual Telegram ID
-    }

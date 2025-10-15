@@ -135,22 +135,13 @@ exports.init = (app: any) => {
                 const tg = window.Telegram.WebApp;
                 tg.ready();
                 
-                if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                    console.log('👤 Telegram user data found:', tg.initDataUnsafe.user);
-                    // Extract user data from Telegram Web App
-                    const user = tg.initDataUnsafe.user;
-                    const authData = JSON.stringify({
-                        id: user.id,
-                        first_name: user.first_name,
-                        last_name: user.last_name,
-                        username: user.username,
-                        photo_url: user.photo_url
-                    });
-                    
-                    console.log('📤 Sending Telegram auth data:', authData);
-                    app.ports.telegramAuthResult.send(authData);
+                // Send the full initData string which includes the hash for verification
+                if (tg.initData && tg.initData.length > 0) {
+                    console.log('👤 Telegram initData found (length:', tg.initData.length, ')');
+                    console.log('📤 Sending Telegram initData for verification');
+                    app.ports.telegramAuthResult.send(tg.initData);
                 } else {
-                    console.error('❌ No user data available from Telegram');
+                    console.error('❌ No initData available from Telegram');
                 }
             } else {
                 // Fallback for development/testing
