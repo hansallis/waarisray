@@ -36,6 +36,7 @@ type alias User =
 
 type alias Guess =
     { userId : Int
+    , userName : String
     , location : Location
     , timestamp : Time.Posix
     , distanceKm : Maybe Float  -- Calculated after round closes

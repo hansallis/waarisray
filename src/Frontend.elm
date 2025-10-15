@@ -618,6 +618,7 @@ viewRayControls model =
                     [ h3 [] [ text "Round in progress" ]
                     , p [] [ text ("Started: " ++ formatTime round.startTime) ]
                     , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
+                    , viewCurrentGuesses round
                     , button [ onClick CloseRound ] [ text "Close Round" ]
                     ]
 
@@ -627,6 +628,46 @@ viewRayControls model =
                     , viewRoundResults round
                     , button [ onClick StartNewRound ] [ text "Start New Round" ]
                     ]
+
+
+viewCurrentGuesses : Round -> Html FrontendMsg
+viewCurrentGuesses round =
+    let
+        guessesWithDistance =
+            round.guesses
+                |> Dict.values
+                |> List.map
+                    (\guess ->
+                        let
+                            distance =
+                                calculateDistance guess.location round.actualLocation
+                        in
+                        { guess = guess
+                        , distance = distance
+                        }
+                    )
+                |> List.sortBy .distance
+    in
+    if List.isEmpty guessesWithDistance then
+        div [ class "current-guesses" ]
+            [ p [ class "no-guesses" ] [ text "No guesses yet" ] ]
+
+    else
+        div [ class "current-guesses" ]
+            [ h4 [] [ text "Current Guesses" ]
+            , div [ class "guesses-list" ]
+                (guessesWithDistance
+                    |> List.indexedMap
+                        (\index { guess, distance } ->
+                            div [ class "guess-item" ]
+                                [ span [ class "rank" ] [ text (String.fromInt (index + 1) ++ ".") ]
+                                , span [ class "user" ] [ text guess.userName ]
+                                , span [ class "distance" ]
+                                    [ text (String.fromInt (Basics.round distance) ++ " km") ]
+                                ]
+                        )
+                )
+            ]
 
 
 viewPlayerControls : Model -> Html FrontendMsg
@@ -781,7 +822,7 @@ viewRoundResults round =
                     (\index guess ->
                         div [ class "result-item" ]
                             [ span [ class "rank" ] [ text (String.fromInt (index + 1) ++ ".") ]
-                            , span [ class "user" ] [ text ("User " ++ String.fromInt guess.userId) ]
+                            , span [ class "user" ] [ text guess.userName ]
                             , span [ class "distance" ]
                                 [ text
                                     (case guess.distanceKm of
@@ -960,6 +1001,35 @@ viewStyles =
                 background: #f8f9fa;
                 border-radius: 4px;
                 align-items: center;
+            }
+            
+            .current-guesses {
+                margin-top: 1.5rem;
+                padding: 1rem;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }
+            
+            .current-guesses h4 {
+                margin-bottom: 1rem;
+                color: #2c3e50;
+            }
+            
+            .no-guesses {
+                color: #7f8c8d;
+                font-style: italic;
+            }
+            
+            .guesses-list { display: flex; flex-direction: column; gap: 0.5rem; }
+            
+            .guess-item {
+                display: flex;
+                gap: 1rem;
+                padding: 0.75rem;
+                background: white;
+                border-radius: 4px;
+                align-items: center;
+                border-left: 3px solid #3498db;
             }
             
             .rank { font-weight: bold; min-width: 2rem; }

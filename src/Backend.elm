@@ -437,6 +437,7 @@ handleSubmitGuess sessionId clientId location model =
                                 let
                                     guess =
                                         { userId = user.telegramUser.id
+                                        , userName = user.telegramUser.firstName
                                         , location = location
                                         , timestamp = Time.millisToPosix 0 -- Will be set properly
                                         , distanceKm = Nothing -- Calculated when round closes
