@@ -1,6 +1,6 @@
 module Backend exposing (..)
 
-import Crypto.HMAC exposing (digest, sha256)
+import Crypto.HMAC exposing (digest, digestBytes, sha256)
 import Dict
 import Env
 import Json.Decode as Decode
@@ -8,6 +8,7 @@ import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFro
 import Task
 import Time
 import Types exposing (..)
+import Url
 import Word.Hex as Hex
 
 
@@ -333,17 +334,38 @@ urlDecodePercent str =
 verifyHash : String -> String -> Bool
 verifyHash dataCheckString providedHash =
     let
-        -- Step 1: Create secret_key = HMAC_SHA256(bot_token, "WebAppData")
-        secretKey =
+        -- Step 1: Create secret_key = HMAC_SHA256(key=bot_token, message="WebAppData")
+        secretKeyHex =
             digest sha256 "WebAppData" Env.telegramConfig.botToken
-                |> Debug.log "secret key"
+
+        -- Convert hex string to bytes for use as key
+        secretKeyBytes =
+            Hex.toByteList secretKeyHex
+
+        -- Convert dataCheckString to bytes
+        dataCheckBytes =
+            stringToBytes (dataCheckString |> Url.percentDecode |> Maybe.withDefault "failed to percent decode")
 
         -- Step 2: Create hash = HMAC_SHA256(secret_key, data_check_string)
+        -- Use digestBytes since the key is now in byte format
+        calculatedHashBytes =
+            digestBytes sha256 secretKeyBytes dataCheckBytes
+
+        -- Convert result back to hex string
         calculatedHash =
-            digest sha256 secretKey (dataCheckString |> Debug.log "dataCheckString")
+            Hex.fromByteList calculatedHashBytes
     in
     -- Compare the calculated hash with the provided hash (case-insensitive)
     String.toLower calculatedHash == String.toLower providedHash
+
+
+{-| Convert a String to a List of bytes (List Int)
+-}
+stringToBytes : String -> List Int
+stringToBytes str =
+    str
+        |> String.toList
+        |> List.map Char.toCode
 
 
 
