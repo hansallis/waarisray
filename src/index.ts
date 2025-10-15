@@ -214,18 +214,6 @@ exports.init = (app: any) => {
         }
     };
     
-    // Fallback: Add direct event listener after page loads
-    setTimeout(() => {
-        const loginBtn = document.querySelector('.telegram-login-btn');
-        if (loginBtn) {
-            console.log('🔧 Adding fallback click listener to login button');
-            loginBtn.addEventListener('click', function(e) {
-                console.log('🔧 Fallback button clicked!');
-                window.testLogin();
-            });
-        }
-    }, 1000);
-    
     // Make map globally accessible for debugging
     // window.rayMap = map;
 }

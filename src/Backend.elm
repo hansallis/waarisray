@@ -4,7 +4,7 @@ import Dict exposing (Dict)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
-import Lamdera exposing (ClientId, SessionId, sendToFrontend)
+import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
 import Random
 import Task
 import Time
@@ -32,6 +32,7 @@ init =
       , rounds = Dict.empty
       , currentRoundId = Nothing
       , userSessions = Dict.empty
+      , sessionClients = Dict.empty
       }
     , Cmd.none
     )
@@ -44,6 +45,36 @@ update msg model =
     case msg of
         NoOpBackendMsg ->
             ( model, Cmd.none )
+
+        Connected sessionId clientId ->
+            let
+                updated =
+                    case Dict.get sessionId model.sessionClients of
+                        Just clients ->
+                            Dict.insert sessionId (clientId :: clients) model.sessionClients
+
+                        Nothing ->
+                            Dict.insert sessionId [ clientId ] model.sessionClients
+            in
+            ( { model | sessionClients = updated }, Cmd.none )
+
+        Disconnected sessionId clientId ->
+            let
+                updated =
+                    case Dict.get sessionId model.sessionClients of
+                        Just clients ->
+                            let
+                                remaining = List.filter ((/=) clientId) clients
+                            in
+                            if List.isEmpty remaining then
+                                Dict.remove sessionId model.sessionClients
+                            else
+                                Dict.insert sessionId remaining model.sessionClients
+
+                        Nothing ->
+                            model.sessionClients
+            in
+            ( { model | sessionClients = updated }, Cmd.none )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
@@ -403,21 +434,44 @@ handleRequestRoundHistory sessionId clientId model =
 
 broadcastRoundCreated : Round -> Model -> Cmd BackendMsg
 broadcastRoundCreated round model =
-    -- In a real implementation, you would broadcast to all connected clients
-    -- For now, we'll just use a no-op
-    Cmd.none
+    let
+        allClientIds =
+            model.sessionClients
+                |> Dict.values
+                |> List.concat
+
+        send clientId =
+            sendToFrontend clientId (RoundCreated round)
+    in
+    Cmd.batch (List.map send allClientIds)
 
 
 broadcastGuessSubmitted : Int -> Location -> Model -> Cmd BackendMsg
 broadcastGuessSubmitted userId location model =
-    -- Broadcast to all clients except the one who submitted the guess
-    Cmd.none
+    let
+        allClientIds =
+            model.sessionClients
+                |> Dict.values
+                |> List.concat
+
+        send clientId =
+            sendToFrontend clientId (GuessSubmitted userId location)
+    in
+    Cmd.batch (List.map send allClientIds)
 
 
 broadcastRoundClosed : Round -> Model -> Cmd BackendMsg
 broadcastRoundClosed round model =
-    -- Broadcast to all connected clients
-    Cmd.none
+    let
+        allClientIds =
+            model.sessionClients
+                |> Dict.values
+                |> List.concat
+
+        send clientId =
+            sendToFrontend clientId (RoundClosed round)
+    in
+    Cmd.batch (List.map send allClientIds)
 
 
 -- HELPER FUNCTIONS
@@ -437,7 +491,10 @@ generateRoundId _ =
 
 subscriptions : Model -> Sub BackendMsg
 subscriptions model =
-    Sub.none
+    Sub.batch
+        [ onConnect Connected
+        , onDisconnect Disconnected
+        ]
 
 
 -- CONFIGURATION

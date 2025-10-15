@@ -8,6 +8,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import Time
 import Url exposing (Url)
+import Lamdera exposing (ClientId, SessionId)
 
 
 -- CORE TYPES
@@ -88,7 +89,8 @@ type alias BackendModel =
     { users : Dict Int User  -- userId -> User
     , rounds : Dict String Round  -- roundId -> Round
     , currentRoundId : Maybe String
-    , userSessions : Dict String Int  -- sessionId -> userId
+    , userSessions : Dict SessionId Int  -- sessionId -> userId
+    , sessionClients : Dict SessionId (List ClientId)  -- sessionId -> connected clientIds
     }
 
 
@@ -124,6 +126,8 @@ type FrontendMsg
 
 type BackendMsg
     = NoOpBackendMsg
+    | Connected SessionId ClientId
+    | Disconnected SessionId ClientId
 
 
 -- FRONTEND -> BACKEND
