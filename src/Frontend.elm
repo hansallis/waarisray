@@ -658,17 +658,12 @@ viewMap model =
          ]
             ++ (case model.currentRound of
                     Just { actualLocation, guesses } ->
-                        [ node "leaflet-marker"
-                            [ attribute "icon" "piloticon", attribute "latitude" (actualLocation.lat |> String.fromFloat), attribute "longitude" (actualLocation.lng |> String.fromFloat), attribute "title" "Actual location" ]
-                            [ b [] [ text "Actual location" ], p [] [ text "Ray is dus hier" ] ]
-                        ]
+                        [ viewMapMarker "piloticon" actualLocation [ b [] [ text "Actual location" ], p [] [ text "Ray is dus hier" ] ] ]
                             ++ (guesses
                                     |> Dict.values
                                     |> List.map
                                         (\guess ->
-                                            node "leaflet-marker"
-                                                [ attribute "icon" "questionicon", attribute "latitude" (guess.location.lat |> String.fromFloat), attribute "longitude" (guess.location.lng |> String.fromFloat), attribute "title" "Actual location" ]
-                                                [ b [] [ text <| guess.userName ], p [] [ text "Gokje" ] ]
+                                            viewMapMarker "questionicon" guess.location [ b [] [ text <| guess.userName ], p [] [ text "Gokje" ] ]
                                         )
                                )
 
@@ -676,6 +671,13 @@ viewMap model =
                         []
                )
         )
+
+
+viewMapMarker : String -> Location -> List (Html msg) -> Html msg
+viewMapMarker icon location popup =
+    node "leaflet-marker"
+        [ attribute "icon" icon, attribute "latitude" (location.lat |> String.fromFloat), attribute "longitude" (location.lng |> String.fromFloat), attribute "title" "Actual location" ]
+        popup
 
 
 clickDecoder : Decode.Decoder FrontendMsg
