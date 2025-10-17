@@ -54,7 +54,6 @@ init url key =
       , pastRounds = []
       , userGuess = Nothing
       , pendingLocation = Nothing
-      , showingGuesses = False
       , mapCenter = initialLocation
       , mapZoom = 2
       , error = Nothing
@@ -172,11 +171,6 @@ update msg model =
                     else
                         ( model, Cmd.none )
 
-        SetMapCenter location zoom ->
-            ( { model | mapCenter = location, mapZoom = round zoom }
-            , Cmd.none
-            )
-
         StartNewRound ->
             case model.currentUser of
                 Just user ->
@@ -186,7 +180,6 @@ update msg model =
                             | currentRound = Nothing
                             , page = GamePage
                             , userGuess = Nothing
-                            , showingGuesses = False
                             , pendingLocation = Nothing
                           }
                         , Cmd.none
@@ -261,11 +254,6 @@ update msg model =
             , Lamdera.sendToBackend RequestCurrentGameState
             )
 
-        ToggleGuessesVisibility ->
-            ( { model | showingGuesses = not model.showingGuesses }
-            , showAllGuesses model
-            )
-
         ClearError ->
             ( { model | error = Nothing }
             , Cmd.none
@@ -310,6 +298,14 @@ updateFromBackend msg model =
                     { model
                         | currentUser = currentUser
                         , currentRound = currentRound
+                        , userGuess =
+                            case ( currentUser, currentRound ) of
+                                ( Just user, Just round ) ->
+                                    Dict.get user.telegramUser.id round.guesses
+                                        |> Maybe.map .location
+
+                                _ ->
+                                    Nothing
                         , pastRounds = pastRounds
                         , page = newPage
                     }
@@ -666,19 +662,32 @@ viewPlayerControls model =
 
                     Just _ ->
                         div []
-                            [ h3 [] [ text "Guess submitted!" ]
-                            , button [ onClick SubmitGuess ] [ text "Confirm Guess" ]
-                            , p [] [ text ("Other players have made " ++ String.fromInt (Dict.size round.guesses) ++ " guesses") ]
-                            , button [ onClick ToggleGuessesVisibility ]
-                                [ text
-                                    (if model.showingGuesses then
-                                        "Hide Other Guesses"
+                            (case model.currentUser of
+                                Just user ->
+                                    if Dict.member user.telegramUser.id round.guesses then
+                                        [ h3 [] [ text "Guess submitted!" ]
+                                        , p []
+                                            [ text
+                                                (case Dict.size round.guesses of
+                                                    1 ->
+                                                        "You're the only participant so far"
 
-                                     else
-                                        "Show Other Guesses"
-                                    )
-                                ]
-                            ]
+                                                    count ->
+                                                        "Other players have made " ++ String.fromInt count ++ " guess(es)"
+                                                )
+                                            ]
+                                        ]
+
+                                    else
+                                        [ h3 []
+                                            [ text "Confirm your guess" ]
+                                        , br [] []
+                                        , button [ onClick SubmitGuess ] [ text "Confirm guess" ]
+                                        ]
+
+                                _ ->
+                                    [ h3 [] [ text "🤷\u{200D}♂️" ] ]
+                            )
 
             else
                 div []

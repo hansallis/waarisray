@@ -6,12 +6,14 @@ import Dict exposing (Dict)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Lamdera exposing (ClientId, SessionId)
 import Time
 import Url exposing (Url)
-import Lamdera exposing (ClientId, SessionId)
+
 
 
 -- CORE TYPES
+
 
 type alias Location =
     { lat : Float
@@ -30,7 +32,7 @@ type alias TelegramUser =
 
 type alias User =
     { telegramUser : TelegramUser
-    , isRay : Bool  -- Special flag for Ray (the pilot)
+    , isRay : Bool -- Special flag for Ray (the pilot)
     }
 
 
@@ -39,35 +41,37 @@ type alias Guess =
     , userName : String
     , location : Location
     , timestamp : Time.Posix
-    , distanceKm : Maybe Float  -- Calculated after round closes
+    , distanceKm : Maybe Float -- Calculated after round closes
     }
 
 
 type alias Round =
     { id : String
-    , createdBy : Int  -- Ray's user ID
+    , createdBy : Int -- Ray's user ID
     , actualLocation : Location
     , startTime : Time.Posix
     , endTime : Maybe Time.Posix
-    , guesses : Dict Int Guess  -- userId -> Guess
+    , guesses : Dict Int Guess -- userId -> Guess
     , isOpen : Bool
     }
 
 
 type RoundStatus
-    = WaitingForLocation  -- Ray needs to set location
-    | Open  -- Users can make guesses
-    | Closed  -- Round finished, showing results
+    = WaitingForLocation -- Ray needs to set location
+    | Open -- Users can make guesses
+    | Closed -- Round finished, showing results
 
 
 type Page
     = LoginPage
     | GamePage
-    | ResultsPage String  -- Round ID
+    | ResultsPage String -- Round ID
     | HistoryPage
 
 
+
 -- FRONTEND MODEL
+
 
 type alias FrontendModel =
     { key : Key
@@ -76,27 +80,29 @@ type alias FrontendModel =
     , currentRound : Maybe Round
     , pastRounds : List Round
     , userGuess : Maybe Location
-    , pendingLocation : Maybe Location  -- Ray's pending location before confirming
-    , showingGuesses : Bool
+    , pendingLocation : Maybe Location -- Ray's pending location before confirming
     , mapCenter : Location
     , mapZoom : Int
     , error : Maybe String
-    , authData : Maybe String  -- Telegram auth data
+    , authData : Maybe String -- Telegram auth data
     }
+
 
 
 -- BACKEND MODEL
 
+
 type alias BackendModel =
-    { users : Dict Int User  -- userId -> User
-    , rounds : Dict String Round  -- roundId -> Round
+    { users : Dict Int User -- userId -> User
+    , rounds : Dict String Round -- roundId -> Round
     , currentRoundId : Maybe String
-    , userSessions : Dict SessionId Int  -- sessionId -> userId
-    , sessionClients : Dict SessionId (List ClientId)  -- sessionId -> connected clientIds
+    , userSessions : Dict SessionId Int -- sessionId -> userId
     }
 
 
+
 -- FRONTEND MESSAGES
+
 
 type FrontendMsg
     = UrlClicked UrlRequest
@@ -110,7 +116,6 @@ type FrontendMsg
     | LoginAsRegularUser
     | -- Map interactions
       MapClicked Location
-    | SetMapCenter Location Float
     | -- Game actions
       StartNewRound
     | ConfirmStartRound
@@ -121,37 +126,40 @@ type FrontendMsg
     | GoToHistory
     | GoToGame
     | -- UI
-      ToggleGuessesVisibility
-    | ClearError
+      ClearError
     | NoOpFrontendMsg
+
 
 
 -- BACKEND MESSAGES
 
+
 type BackendMsg
     = NoOpBackendMsg
-    | Connected SessionId ClientId
-    | Disconnected SessionId ClientId
+
 
 
 -- FRONTEND -> BACKEND
 
+
 type ToBackend
     = -- Authentication
-      AuthenticateWithTelegram String  -- auth data
+      AuthenticateWithTelegram String -- auth data
     | LogoutUser
     | -- Testing authentication
       AuthenticateAsRay
     | AuthenticateAsRegularUser
     | -- Game actions
-      CreateNewRound Location  -- Ray sets location
+      CreateNewRound Location -- Ray sets location
     | SubmitUserGuess Location
     | EndCurrentRound
     | RequestCurrentGameState
     | RequestRoundHistory
 
 
+
 -- BACKEND -> FRONTEND
+
 
 type ToFrontend
     = -- Authentication
@@ -163,17 +171,23 @@ type ToFrontend
         , pastRounds : List Round
         }
     | RoundCreated Round
-    | GuessSubmitted Guess  -- Full guess with all info
-    | RoundClosed Round  -- Round with calculated distances
+    | GuessSubmitted Guess -- Full guess with all info
+    | RoundClosed Round -- Round with calculated distances
     | -- Errors
       ErrorMessage String
 
 
+
 -- HELPER FUNCTIONS
+
 
 initialLocation : Location
 initialLocation =
-    { lat = 51.5074, lng = -0.1278 }  -- London
+    { lat = 51.5074, lng = -0.1278 }
+
+
+
+-- London
 
 
 calculateDistance : Location -> Location -> Float
@@ -182,17 +196,34 @@ calculateDistance loc1 loc2 =
         toRadians degrees =
             degrees * pi / 180
 
-        lat1 = toRadians loc1.lat
-        lng1 = toRadians loc1.lng
-        lat2 = toRadians loc2.lat
-        lng2 = toRadians loc2.lng
+        lat1 =
+            toRadians loc1.lat
 
-        dlat = lat2 - lat1
-        dlng = lng2 - lng1
+        lng1 =
+            toRadians loc1.lng
 
-        a = sin(dlat/2)^2 + cos(lat1) * cos(lat2) * sin(dlng/2)^2
-        c = 2 * atan2 (sqrt a) (sqrt (1-a))
-        r = 6371  -- Earth's radius in kilometers
+        lat2 =
+            toRadians loc2.lat
+
+        lng2 =
+            toRadians loc2.lng
+
+        dlat =
+            lat2 - lat1
+
+        dlng =
+            lng2 - lng1
+
+        a =
+            sin (dlat / 2) ^ 2 + cos lat1 * cos lat2 * sin (dlng / 2) ^ 2
+
+        c =
+            2 * atan2 (sqrt a) (sqrt (1 - a))
+
+        r =
+            6371
+
+        -- Earth's radius in kilometers
     in
     r * c
 
@@ -200,8 +231,8 @@ calculateDistance loc1 loc2 =
 encodeLocation : Location -> Encode.Value
 encodeLocation location =
     Encode.object
-        [ ("lat", Encode.float location.lat)
-        , ("lng", Encode.float location.lng)
+        [ ( "lat", Encode.float location.lat )
+        , ( "lng", Encode.float location.lng )
         ]
 
 
@@ -215,11 +246,11 @@ locationDecoder =
 encodeTelegramUser : TelegramUser -> Encode.Value
 encodeTelegramUser user =
     Encode.object
-        [ ("id", Encode.int user.id)
-        , ("firstName", Encode.string user.firstName)
-        , ("lastName", encodeNullable Encode.string user.lastName)
-        , ("username", encodeNullable Encode.string user.username)
-        , ("photoUrl", encodeNullable Encode.string user.photoUrl)
+        [ ( "id", Encode.int user.id )
+        , ( "firstName", Encode.string user.firstName )
+        , ( "lastName", encodeNullable Encode.string user.lastName )
+        , ( "username", encodeNullable Encode.string user.username )
+        , ( "photoUrl", encodeNullable Encode.string user.photoUrl )
         ]
 
 
@@ -238,5 +269,6 @@ encodeNullable encoder maybeValue =
     case maybeValue of
         Just value ->
             encoder value
+
         Nothing ->
             Encode.null

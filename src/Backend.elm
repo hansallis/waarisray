@@ -35,7 +35,6 @@ init =
       , rounds = Dict.empty
       , currentRoundId = Nothing
       , userSessions = Dict.empty
-      , sessionClients = Dict.empty
       }
     , Cmd.none
     )
@@ -50,38 +49,6 @@ update msg model =
     case msg of
         NoOpBackendMsg ->
             ( model, Cmd.none )
-
-        Connected sessionId clientId ->
-            let
-                updated =
-                    case Dict.get sessionId model.sessionClients of
-                        Just clients ->
-                            Dict.insert sessionId (clientId :: clients) model.sessionClients
-
-                        Nothing ->
-                            Dict.insert sessionId [ clientId ] model.sessionClients
-            in
-            ( { model | sessionClients = updated }, Cmd.none )
-
-        Disconnected sessionId clientId ->
-            let
-                updated =
-                    case Dict.get sessionId model.sessionClients of
-                        Just clients ->
-                            let
-                                remaining =
-                                    List.filter ((/=) clientId) clients
-                            in
-                            if List.isEmpty remaining then
-                                Dict.remove sessionId model.sessionClients
-
-                            else
-                                Dict.insert sessionId remaining model.sessionClients
-
-                        Nothing ->
-                            model.sessionClients
-            in
-            ( { model | sessionClients = updated }, Cmd.none )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
@@ -606,44 +573,17 @@ handleRequestRoundHistory sessionId clientId model =
 
 broadcastRoundCreated : Round -> Model -> Cmd BackendMsg
 broadcastRoundCreated round model =
-    let
-        allClientIds =
-            model.sessionClients
-                |> Dict.values
-                |> List.concat
-
-        send clientId =
-            sendToFrontend clientId (RoundCreated round)
-    in
-    Cmd.batch (List.map send allClientIds)
+    Lamdera.broadcast <| RoundCreated round
 
 
 broadcastGuessSubmitted : Guess -> Model -> Cmd BackendMsg
 broadcastGuessSubmitted guess model =
-    let
-        allClientIds =
-            model.sessionClients
-                |> Dict.values
-                |> List.concat
-
-        send clientId =
-            sendToFrontend clientId (GuessSubmitted guess)
-    in
-    Cmd.batch (List.map send allClientIds)
+    Lamdera.broadcast <| GuessSubmitted guess
 
 
 broadcastRoundClosed : Round -> Model -> Cmd BackendMsg
 broadcastRoundClosed round model =
-    let
-        allClientIds =
-            model.sessionClients
-                |> Dict.values
-                |> List.concat
-
-        send clientId =
-            sendToFrontend clientId (RoundClosed round)
-    in
-    Cmd.batch (List.map send allClientIds)
+    Lamdera.broadcast <| RoundClosed round
 
 
 
@@ -665,7 +605,4 @@ generateRoundId _ =
 
 subscriptions : Model -> Sub BackendMsg
 subscriptions _ =
-    Sub.batch
-        [ onConnect Connected
-        , onDisconnect Disconnected
-        ]
+    Sub.none
