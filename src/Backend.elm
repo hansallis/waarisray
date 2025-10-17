@@ -144,11 +144,12 @@ handleLogout sessionId clientId model =
         gameState =
             { currentUser = Nothing
             , currentRound = Nothing
+            , usersGuess = Nothing
             , pastRounds = []
             }
     in
     ( newModel
-    , sendToFrontend clientId (GameStateUpdate gameState)
+    , sendToFrontend sessionId (GameStateUpdate gameState)
     )
 
 
@@ -358,7 +359,6 @@ handleCreateNewRound sessionId clientId location model =
 
                     newRound =
                         { id = roundId
-                        , createdBy = user.telegramUser.id
                         , actualLocation = location
                         , startTime = Time.millisToPosix 0 -- Will be set properly with Time.now
                         , endTime = Nothing
@@ -375,7 +375,7 @@ handleCreateNewRound sessionId clientId location model =
                 ( newModel
                 , Cmd.batch
                     [ Task.perform (always NoOpBackendMsg) (Task.succeed ())
-                    , broadcastRoundCreated newRound model
+                    , broadcastRoundCreated (censorRound newRound) model
                     ]
                 )
 
@@ -535,7 +535,19 @@ handleRequestGameState sessionId clientId model =
         -- Most recent first
         gameState =
             { currentUser = currentUser
-            , currentRound = currentRound
+            , currentRound =
+                if currentUser |> Maybe.map .isRay |> Maybe.withDefault False then
+                    currentRound |> Maybe.map Uncensored
+
+                else
+                    currentRound |> Maybe.map (censorRound >> Censored)
+            , usersGuess =
+                case ( currentRound, currentUser |> Maybe.map (.telegramUser >> .id) ) of
+                    ( Just rnd, Just userId ) ->
+                        Dict.get userId rnd.guesses |> Maybe.map .location
+
+                    _ ->
+                        Nothing
             , pastRounds = pastRounds
             }
     in
@@ -559,6 +571,7 @@ handleRequestRoundHistory sessionId clientId model =
         gameState =
             { currentUser = currentUser
             , currentRound = Nothing
+            , usersGuess = Nothing
             , pastRounds = pastRounds
             }
     in
@@ -571,7 +584,7 @@ handleRequestRoundHistory sessionId clientId model =
 -- BROADCASTING
 
 
-broadcastRoundCreated : Round -> Model -> Cmd BackendMsg
+broadcastRoundCreated : CensoredRound -> Model -> Cmd BackendMsg
 broadcastRoundCreated round model =
     Lamdera.broadcast <| RoundCreated round
 
@@ -581,7 +594,7 @@ broadcastGuessSubmitted guess model =
     Lamdera.broadcast <| GuessSubmitted guess
 
 
-broadcastRoundClosed : Round -> Model -> Cmd BackendMsg
+broadcastRoundClosed : UncensoredRound -> Model -> Cmd BackendMsg
 broadcastRoundClosed round model =
     Lamdera.broadcast <| RoundClosed round
 

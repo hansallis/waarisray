@@ -45,13 +45,46 @@ type alias Guess =
     }
 
 
-type alias Round =
+type alias CensoredRound =
+    Round () ()
+
+
+type alias UncensoredRound =
+    Round Location Guess
+
+
+type FrontendRound
+    = Uncensored UncensoredRound
+    | Censored CensoredRound
+
+
+toCensoredRound : FrontendRound -> CensoredRound
+toCensoredRound round =
+    case round of
+        Censored rnd ->
+            rnd
+
+        Uncensored rnd ->
+            censorRound rnd
+
+
+censorRound : UncensoredRound -> CensoredRound
+censorRound { id, actualLocation, startTime, endTime, guesses, isOpen } =
+    { id = id
+    , actualLocation = ()
+    , startTime = startTime
+    , endTime = endTime
+    , guesses = Dict.map (always (always ())) guesses
+    , isOpen = isOpen
+    }
+
+
+type alias Round actualLocationType guessType =
     { id : String
-    , createdBy : Int -- Ray's user ID
-    , actualLocation : Location
+    , actualLocation : actualLocationType
     , startTime : Time.Posix
     , endTime : Maybe Time.Posix
-    , guesses : Dict Int Guess -- userId -> Guess
+    , guesses : Dict Int guessType -- userId -> Guess
     , isOpen : Bool
     }
 
@@ -77,8 +110,8 @@ type alias FrontendModel =
     { key : Key
     , currentUser : Maybe User
     , page : Page
-    , currentRound : Maybe Round
-    , pastRounds : List Round
+    , currentRound : Maybe FrontendRound
+    , pastRounds : List UncensoredRound
     , userGuess : Maybe Location
     , pendingLocation : Maybe Location -- Ray's pending location before confirming
     , mapCenter : Location
@@ -94,7 +127,7 @@ type alias FrontendModel =
 
 type alias BackendModel =
     { users : Dict Int User -- userId -> User
-    , rounds : Dict String Round -- roundId -> Round
+    , rounds : Dict String UncensoredRound -- roundId -> Round
     , currentRoundId : Maybe String
     , userSessions : Dict SessionId Int -- sessionId -> userId
     }
@@ -167,12 +200,13 @@ type ToFrontend
     | -- Game state updates
       GameStateUpdate
         { currentUser : Maybe User
-        , currentRound : Maybe Round
-        , pastRounds : List Round
+        , currentRound : Maybe FrontendRound
+        , usersGuess : Maybe Location
+        , pastRounds : List UncensoredRound
         }
-    | RoundCreated Round
+    | RoundCreated CensoredRound
     | GuessSubmitted Guess -- Full guess with all info
-    | RoundClosed Round -- Round with calculated distances
+    | RoundClosed UncensoredRound -- Round with calculated distances
     | -- Errors
       ErrorMessage String
 

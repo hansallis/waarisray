@@ -155,7 +155,7 @@ update msg model =
                         -- Check if they've already submitted their guess
                         case model.currentRound of
                             Just round ->
-                                if Dict.member user.telegramUser.id round.guesses then
+                                if Dict.member user.telegramUser.id (round |> toCensoredRound).guesses then
                                     -- Guess already submitted, can't change it
                                     ( model, Cmd.none )
 
@@ -195,7 +195,7 @@ update msg model =
             case ( model.currentUser, model.pendingLocation ) of
                 ( Just user, Just location ) ->
                     if user.isRay then
-                        ( { model | pendingLocation = Nothing }
+                        ( model
                         , Lamdera.sendToBackend (CreateNewRound location)
                         )
 
@@ -276,7 +276,7 @@ updateFromBackend msg model =
             , Cmd.none
             )
 
-        GameStateUpdate { currentUser, currentRound, pastRounds } ->
+        GameStateUpdate { currentUser, currentRound, usersGuess, pastRounds } ->
             let
                 _ =
                     Debug.log "🔄 GameStateUpdate received"
@@ -298,14 +298,7 @@ updateFromBackend msg model =
                     { model
                         | currentUser = currentUser
                         , currentRound = currentRound
-                        , userGuess =
-                            case ( currentUser, currentRound ) of
-                                ( Just user, Just round ) ->
-                                    Dict.get user.telegramUser.id round.guesses
-                                        |> Maybe.map .location
-
-                                _ ->
-                                    Nothing
+                        , userGuess = usersGuess
                         , pastRounds = pastRounds
                         , page = newPage
                     }
@@ -319,8 +312,18 @@ updateFromBackend msg model =
                     Cmd.none
             )
 
-        RoundCreated round ->
-            ( { model | currentRound = Just round }
+        RoundCreated { id, actualLocation, startTime, endTime, guesses, isOpen } ->
+            ( { model
+                | currentRound =
+                    Just
+                        (case ( model.pendingLocation, model.currentUser |> Maybe.map .isRay |> Maybe.withDefault False ) of
+                            ( Just actualLoc, True ) ->
+                                Uncensored { id = id, actualLocation = actualLoc, startTime = startTime, endTime = endTime, guesses = Dict.empty, isOpen = isOpen }
+
+                            _ ->
+                                Censored { id = id, actualLocation = actualLocation, startTime = startTime, endTime = endTime, guesses = guesses, isOpen = isOpen }
+                        )
+              }
             , Cmd.none
             )
 
@@ -331,10 +334,16 @@ updateFromBackend msg model =
                         -- Update the current round with the new guess
                         updatedModel =
                             { model
-                                | currentRound =
+                                | userGuess = Just guess.location
+                                , currentRound =
                                     case model.currentRound of
                                         Just round ->
-                                            Just { round | guesses = Dict.insert guess.userId guess round.guesses }
+                                            case round of
+                                                Uncensored rnd ->
+                                                    Just (Uncensored { rnd | guesses = Dict.insert guess.userId guess rnd.guesses })
+
+                                                Censored rnd ->
+                                                    Just (Censored { rnd | guesses = Dict.insert guess.userId () rnd.guesses })
 
                                         Nothing ->
                                             Nothing
@@ -354,7 +363,7 @@ updateFromBackend msg model =
                     ( model, Cmd.none )
 
         RoundClosed round ->
-            ( { model | currentRound = Just round, pastRounds = round :: model.pastRounds }
+            ( { model | currentRound = Just (Uncensored round), pastRounds = round :: model.pastRounds }
             , Cmd.none
             )
 
@@ -573,7 +582,21 @@ viewRayControls model =
                         , p [] [ text "Click on the map to set your current location" ]
                         ]
 
-        Just round ->
+        Just (Censored round) ->
+            if round.isOpen then
+                div []
+                    [ h3 [] [ text "Round in progress" ]
+                    , p [] [ text ("Started: " ++ formatTime round.startTime) ]
+                    , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
+                    ]
+
+            else
+                div []
+                    [ h3 [] [ text "Round completed" ]
+                    , button [ onClick StartNewRound ] [ text "Start New Round" ]
+                    ]
+
+        Just (Uncensored round) ->
             if round.isOpen then
                 div []
                     [ h3 [] [ text "Round in progress" ]
@@ -592,7 +615,7 @@ viewRayControls model =
                     ]
 
 
-viewCurrentGuessesTable : Round -> Html FrontendMsg
+viewCurrentGuessesTable : UncensoredRound -> Html FrontendMsg
 viewCurrentGuessesTable round =
     let
         guessesWithDistance =
@@ -651,7 +674,50 @@ viewPlayerControls model =
                         , p [] [ text "Waiting for Ray to start the first round..." ]
                         ]
 
-        Just round ->
+        Just (Censored round) ->
+            if round.isOpen then
+                case model.userGuess of
+                    Nothing ->
+                        div []
+                            [ h3 [] [ text "Make your guess!" ]
+                            , p [] [ text "Click on the map where you think Ray is located" ]
+                            ]
+
+                    Just _ ->
+                        div []
+                            (case model.currentUser of
+                                Just user ->
+                                    if Dict.member user.telegramUser.id round.guesses then
+                                        [ h3 [] [ text "Guess submitted!" ]
+                                        , p []
+                                            [ text
+                                                (case Dict.size round.guesses of
+                                                    1 ->
+                                                        "You're the only participant so far"
+
+                                                    count ->
+                                                        "Other players have made " ++ String.fromInt count ++ " guess(es)"
+                                                )
+                                            ]
+                                        ]
+
+                                    else
+                                        [ h3 []
+                                            [ text "Confirm your guess" ]
+                                        , br [] []
+                                        , button [ onClick SubmitGuess ] [ text "Confirm guess" ]
+                                        ]
+
+                                _ ->
+                                    [ h3 [] [ text "🤷\u{200D}♂️" ] ]
+                            )
+
+            else
+                div []
+                    [ h3 [] [ text "Round completed!" ]
+                    ]
+
+        Just (Uncensored round) ->
             if round.isOpen then
                 case model.userGuess of
                     Nothing ->
@@ -698,7 +764,7 @@ viewPlayerControls model =
 
 viewGameStatus : Model -> User -> Html FrontendMsg
 viewGameStatus model user =
-    case model.currentRound of
+    case model.currentRound |> Maybe.map toCensoredRound of
         Just round ->
             div [ class "game-status" ]
                 [ h4 [] [ text "Round Status" ]
@@ -722,7 +788,7 @@ viewMap model =
     let
         markers =
             case model.currentRound of
-                Just round ->
+                Just (Uncensored round) ->
                     if round.isOpen then
                         -- Active open round
                         case model.currentUser of
@@ -760,6 +826,21 @@ viewMap model =
                                             viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
                                         )
                                )
+
+                Just (Censored round) ->
+                    -- Active open round
+                    case model.currentUser of
+                        Just user ->
+                            -- Regular users see their own pending guess (if any)
+                            case model.userGuess of
+                                Just guessLocation ->
+                                    [ viewMapMarker "questionicon" guessLocation [ b [] [ text "Your Guess" ], p [] [ text "Click confirm to submit" ] ] ]
+
+                                Nothing ->
+                                    []
+
+                        Nothing ->
+                            []
 
                 Nothing ->
                     -- No active round
@@ -871,12 +952,12 @@ viewHistoryPage model =
           else
             div [ class "rounds-list" ]
                 (model.pastRounds
-                    |> List.map viewRoundSummary
+                    |> List.map (censorRound >> viewRoundSummary)
                 )
         ]
 
 
-viewRoundSummary : Round -> Html FrontendMsg
+viewRoundSummary : CensoredRound -> Html FrontendMsg
 viewRoundSummary round =
     div [ class "round-summary" ]
         [ h4 [] [ text ("Round " ++ round.id) ]
@@ -892,7 +973,7 @@ viewRoundSummary round =
         ]
 
 
-viewRoundResults : Round -> Html FrontendMsg
+viewRoundResults : UncensoredRound -> Html FrontendMsg
 viewRoundResults round =
     let
         sortedGuesses =
