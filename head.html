@@ -135,4 +135,47 @@
     .logout-btn:hover {
         background: #c0392b;
     }
+    
+    /* Wobbly grow animation */
+    @keyframes wobbly-grow {
+        0% {
+            transform: scale(0) !important;
+            opacity: 0;
+        }
+        50% {
+            transform: scale(1.1) !important;
+            opacity: 1;
+        }
+        65% {
+            transform: scale(0.9) !important;
+        }
+        80% {
+            transform: scale(1.05) !important;
+        }
+        95% {
+            transform: scale(0.98) !important;
+        }
+        100% {
+            transform: scale(1) !important;
+            opacity: 1;
+        }
+    }
+    
+    .wobbly-grow {
+        animation: wobbly-grow 0.6s ease-out forwards !important;
+        transform-origin: bottom center !important;
+    }
+    
+    /* Optional: If you want it hidden initially before animation starts */
+    .wobbly-grow-hidden {
+        transform: scale(0);
+        opacity: 0;
+        transform-origin: bottom center;
+    }
+    
+    /* Apply animation to Leaflet marker icons */
+    .leaflet-marker-icon {
+        animation: wobbly-grow 0.6s ease-out forwards !important;
+        transform-origin: bottom center !important;
+    }
 </style>

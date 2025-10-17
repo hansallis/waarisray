@@ -26,8 +26,8 @@ exports.init = (app: any) => {
     console.log('🔍 Available ports:', Object.keys(app.ports || {}));
     
     // Map functionality - wait for Elm to tell us to initialize
-    app.ports.initMap.subscribe(function(config: any) {
-        console.log('🗺️ Initializing map with config:', config);
+    // app.ports.initMap.subscribe(function(config: any) {
+    //     console.log('🗺️ Initializing map with config:', config);
         
         // Remove existing map if any
         // if (map) {
@@ -47,7 +47,7 @@ exports.init = (app: any) => {
         //         initializeMap(config);
         //     }
         // }, 100);
-    });
+    // });
     
     // function initializeMap(config) {
     //     const mapElement = document.getElementById('map');

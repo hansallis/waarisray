@@ -19,21 +19,6 @@ import Url
 -- PORTS
 
 
-port initMap : { center : Location, zoom : Int } -> Cmd msg
-
-
-port mapClicked : (Location -> msg) -> Sub msg
-
-
-port setMapCenter : { center : Location, zoom : Int } -> Cmd msg
-
-
-port addMarker : { location : Location, color : String, label : String } -> Cmd msg
-
-
-port clearMarkers : () -> Cmd msg
-
-
 port authenticateWithTelegram : () -> Cmd msg
 
 
@@ -75,8 +60,7 @@ init url key =
       , authData = Nothing
       }
     , Cmd.batch
-        [ initMap { center = initialLocation, zoom = 2 }
-        , Lamdera.sendToBackend RequestCurrentGameState
+        [ Lamdera.sendToBackend RequestCurrentGameState
         ]
     )
 
@@ -162,7 +146,7 @@ update msg model =
                     else if not user.isRay && model.userGuess == Nothing then
                         -- Regular user making a guess
                         ( { model | userGuess = Just location }
-                        , addMarker { location = location, color = "blue", label = "Your Guess" }
+                        , Cmd.none
                         )
 
                     else
@@ -170,7 +154,7 @@ update msg model =
 
         SetMapCenter location zoom ->
             ( { model | mapCenter = location, mapZoom = round zoom }
-            , setMapCenter { center = location, zoom = round zoom }
+            , Cmd.none
             )
 
         StartNewRound ->
@@ -178,10 +162,7 @@ update msg model =
                 Just user ->
                     if user.isRay then
                         ( { model | page = GamePage, userGuess = Nothing, showingGuesses = False }
-                        , Cmd.batch
-                            [ clearMarkers ()
-                            , setMapCenter { center = initialLocation, zoom = 2 }
-                            ]
+                        , Cmd.none
                         )
 
                     else
@@ -235,11 +216,7 @@ update msg model =
 
         ToggleGuessesVisibility ->
             ( { model | showingGuesses = not model.showingGuesses }
-            , if model.showingGuesses then
-                clearMarkers ()
-
-              else
-                showAllGuesses model
+            , showAllGuesses model
             )
 
         ClearError ->
@@ -293,15 +270,15 @@ updateFromBackend msg model =
             ( newModel
             , case currentRound of
                 Just round ->
-                    updateMapForRound newModel round
+                    Cmd.none
 
                 Nothing ->
-                    clearMarkers ()
+                    Cmd.none
             )
 
         RoundCreated round ->
             ( { model | currentRound = Just round }
-            , clearMarkers ()
+            , Cmd.none
             )
 
         GuessSubmitted userId location ->
@@ -313,8 +290,16 @@ updateFromBackend msg model =
                         )
 
                     else if model.showingGuesses then
-                        ( model
-                        , addMarker { location = location, color = "red", label = "Other Guess" }
+                        ( { model
+                            | currentRound =
+                                case model.currentRound of
+                                    Just round ->
+                                        Just { round | guesses = Dict.insert userId { location = location, userId = userId, userName = "hoi", timestamp = Time.millisToPosix 0, distanceKm = Nothing } round.guesses }
+
+                                    Nothing ->
+                                        Nothing
+                          }
+                        , Cmd.none
                         )
 
                     else
@@ -325,7 +310,7 @@ updateFromBackend msg model =
 
         RoundClosed round ->
             ( { model | currentRound = Just round, pastRounds = round :: model.pastRounds }
-            , updateMapForClosedRound model round
+            , Cmd.none
             )
 
         ErrorMessage error ->
@@ -340,113 +325,26 @@ updateFromBackend msg model =
 
 showAllGuesses : Model -> Cmd FrontendMsg
 showAllGuesses model =
-    case model.currentRound of
-        Just round ->
-            let
-                guessMarkers =
-                    round.guesses
-                        |> Dict.values
-                        |> List.map
-                            (\guess ->
-                                addMarker
-                                    { location = guess.location
-                                    , color = "red"
-                                    , label = "Guess"
-                                    }
-                            )
-            in
-            Cmd.batch guessMarkers
+    {- case model.currentRound of
+       Just round ->
+           let
+               guessMarkers =
+                   round.guesses
+                       |> Dict.values
+                       |> List.map
+                           (\guess ->
+                               addMarker
+                                   { location = guess.location
+                                   , color = "red"
+                                   , label = "Guess"
+                                   }
+                           )
+           in
+           Cmd.batch guessMarkers
 
-        Nothing ->
-            Cmd.none
-
-
-updateMapForRound : Model -> Round -> Cmd FrontendMsg
-updateMapForRound model round =
-    let
-        commands =
-            []
-
-        userGuessCmd =
-            case model.userGuess of
-                Just location ->
-                    [ addMarker { location = location, color = "blue", label = "Your Guess" } ]
-
-                Nothing ->
-                    []
-
-        otherGuessesCmd =
-            if model.showingGuesses then
-                case model.currentUser of
-                    Just user ->
-                        round.guesses
-                            |> Dict.filter (\userId _ -> userId /= user.telegramUser.id)
-                            |> Dict.values
-                            |> List.map
-                                (\guess ->
-                                    addMarker
-                                        { location = guess.location
-                                        , color = "red"
-                                        , label = "Other Guess"
-                                        }
-                                )
-
-                    Nothing ->
-                        []
-
-            else
-                []
-
-        actualLocationCmd =
-            if not round.isOpen then
-                [ addMarker { location = round.actualLocation, color = "green", label = "Ray's Location" } ]
-
-            else
-                []
-    in
-    Cmd.batch (userGuessCmd ++ otherGuessesCmd ++ actualLocationCmd)
-
-
-updateMapForClosedRound : Model -> Round -> Cmd FrontendMsg
-updateMapForClosedRound model round =
-    let
-        actualLocationCmd =
-            addMarker { location = round.actualLocation, color = "green", label = "Ray's Location" }
-
-        guessMarkers =
-            round.guesses
-                |> Dict.values
-                |> List.map
-                    (\guess ->
-                        let
-                            color =
-                                case model.currentUser of
-                                    Just user ->
-                                        if guess.userId == user.telegramUser.id then
-                                            "blue"
-
-                                        else
-                                            "red"
-
-                                    Nothing ->
-                                        "red"
-
-                            distanceText =
-                                case guess.distanceKm of
-                                    Just dist ->
-                                        " (" ++ String.fromInt (Basics.round dist) ++ "km)"
-
-                                    Nothing ->
-                                        ""
-                        in
-                        addMarker
-                            { location = guess.location
-                            , color = color
-                            , label = "Guess" ++ distanceText
-                            }
-                    )
-    in
-    Cmd.batch (actualLocationCmd :: guessMarkers)
+       Nothing ->
+    -}
+    Cmd.none
 
 
 
@@ -456,8 +354,7 @@ updateMapForClosedRound model round =
 subscriptions : Model -> Sub FrontendMsg
 subscriptions model =
     Sub.batch
-        [ mapClicked MapClicked
-        , telegramAuthResult (\result -> TelegramAuthResult (Ok result))
+        [ telegramAuthResult (\result -> TelegramAuthResult (Ok result))
         ]
 
 
@@ -586,7 +483,7 @@ viewGamePage model =
         Just user ->
             div [ class "game-page" ]
                 [ viewGameControls model user
-                , viewMap
+                , viewMap model
                 , viewGameStatus model user
                 ]
 
@@ -732,15 +629,53 @@ viewGameStatus model user =
             text ""
 
 
-viewMap : Html FrontendMsg
-viewMap =
+viewMap : Model -> Html FrontendMsg
+viewMap model =
     node "leaflet-map"
         [ on "click" clickDecoder, property "worldCopyJump" (Encode.bool True), attribute "zoom" "3", attribute "min-zoom" "3", attribute "max-zoom" "10" ]
-        [ node "leaflet-scale-control" [ attribute "position" "bottomright", attribute "metric" "metric" ] []
-        , node "leaflet-marker"
-            [ attribute "latitude" "51.5", attribute "longitude" "-0.09", attribute "title" "Popup Demo" ]
-            [ b [] [ text "Bold" ], p [] [ text "Text" ] ]
-        ]
+        ([ node "leaflet-tilelayer" [ attribute "url" "https://api.maptiler.com/maps/topo-v2/{z}/{x}/{y}.png?key=DswcJkmNhAKYInVuYSU6" ] []
+         , node "leaflet-scale-control" [ attribute "position" "bottomright", attribute "metric" "metric" ] []
+         , node "leaflet-icon"
+            [ attribute "icon-height" "46"
+            , attribute "icon-width" "31"
+            , attribute "icon-anchor-x" "15"
+            , attribute "icon-anchor-y" "44"
+            , attribute "icon-url" "https://api.geoapify.com/v2/icon/?type=awesome&color=red&size=42&icon=plane&contentSize=15&apiKey=535804d2778a49adb8bf12f7d55d3eea"
+            , attribute "icon-retina-url" "https://api.geoapify.com/v2/icon/?type=awesome&color=red&size=42&icon=plane&contentSize=15&scaleFactor=2&apiKey=535804d2778a49adb8bf12f7d55d3eea"
+            , id "piloticon"
+            ]
+            []
+         , node "leaflet-icon"
+            [ attribute "icon-height" "46"
+            , attribute "icon-width" "31"
+            , attribute "icon-anchor-x" "15"
+            , attribute "icon-anchor-y" "44"
+            , attribute "icon-url" "https://api.geoapify.com/v2/icon/?type=awesome&color=red&size=42&icon=question&contentSize=15&apiKey=535804d2778a49adb8bf12f7d55d3eea"
+            , attribute "icon-retina-url" "https://api.geoapify.com/v2/icon/?type=awesome&color=red&size=42&icon=question&contentSize=15&scaleFactor=2&apiKey=535804d2778a49adb8bf12f7d55d3eea"
+            , id "questionicon"
+            ]
+            []
+         ]
+            ++ (case model.currentRound of
+                    Just { actualLocation, guesses } ->
+                        [ node "leaflet-marker"
+                            [ attribute "icon" "piloticon", attribute "latitude" (actualLocation.lat |> String.fromFloat), attribute "longitude" (actualLocation.lng |> String.fromFloat), attribute "title" "Actual location" ]
+                            [ b [] [ text "Actual location" ], p [] [ text "Ray is dus hier" ] ]
+                        ]
+                            ++ (guesses
+                                    |> Dict.values
+                                    |> List.map
+                                        (\guess ->
+                                            node "leaflet-marker"
+                                                [ attribute "icon" "questionicon", attribute "latitude" (guess.location.lat |> String.fromFloat), attribute "longitude" (guess.location.lng |> String.fromFloat), attribute "title" "Actual location" ]
+                                                [ b [] [ text <| guess.userName ], p [] [ text "Gokje" ] ]
+                                        )
+                               )
+
+                    Nothing ->
+                        []
+               )
+        )
 
 
 clickDecoder : Decode.Decoder FrontendMsg
