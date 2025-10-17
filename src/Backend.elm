@@ -450,7 +450,7 @@ handleSubmitGuess sessionId clientId location model =
                                         { model | rounds = Dict.insert roundId updatedRound model.rounds }
                                 in
                                 ( newModel
-                                , broadcastGuessSubmitted user.telegramUser.id location model
+                                , broadcastGuessSubmitted guess model
                                 )
 
                         else
@@ -610,8 +610,8 @@ broadcastRoundCreated round model =
     Cmd.batch (List.map send allClientIds)
 
 
-broadcastGuessSubmitted : Int -> Location -> Model -> Cmd BackendMsg
-broadcastGuessSubmitted userId location model =
+broadcastGuessSubmitted : Guess -> Model -> Cmd BackendMsg
+broadcastGuessSubmitted guess model =
     let
         allClientIds =
             model.sessionClients
@@ -619,7 +619,7 @@ broadcastGuessSubmitted userId location model =
                 |> List.concat
 
         send clientId =
-            sendToFrontend clientId (GuessSubmitted userId location)
+            sendToFrontend clientId (GuessSubmitted guess)
     in
     Cmd.batch (List.map send allClientIds)
 

@@ -76,6 +76,7 @@ type alias FrontendModel =
     , currentRound : Maybe Round
     , pastRounds : List Round
     , userGuess : Maybe Location
+    , pendingLocation : Maybe Location  -- Ray's pending location before confirming
     , showingGuesses : Bool
     , mapCenter : Location
     , mapZoom : Int
@@ -112,6 +113,8 @@ type FrontendMsg
     | SetMapCenter Location Float
     | -- Game actions
       StartNewRound
+    | ConfirmStartRound
+    | CancelPendingLocation
     | SubmitGuess
     | CloseRound
     | ViewRound String
@@ -160,7 +163,7 @@ type ToFrontend
         , pastRounds : List Round
         }
     | RoundCreated Round
-    | GuessSubmitted Int Location  -- userId and their guess location
+    | GuessSubmitted Guess  -- Full guess with all info
     | RoundClosed Round  -- Round with calculated distances
     | -- Errors
       ErrorMessage String

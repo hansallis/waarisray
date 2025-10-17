@@ -2,11 +2,10 @@ port module Frontend exposing (..)
 
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
-import Dict exposing (Dict)
+import Dict
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
-import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Lamdera
@@ -53,6 +52,7 @@ init url key =
       , currentRound = Nothing
       , pastRounds = []
       , userGuess = Nothing
+      , pendingLocation = Nothing
       , showingGuesses = False
       , mapCenter = initialLocation
       , mapZoom = 2
@@ -139,15 +139,33 @@ update msg model =
                 Just user ->
                     if user.isRay && model.page == GamePage then
                         -- Ray is setting the location for a new round
-                        ( model
-                        , Lamdera.sendToBackend (CreateNewRound location)
-                        )
+                        case model.currentRound of
+                            Nothing ->
+                                -- No active round - set pending location
+                                ( { model | pendingLocation = Just location }
+                                , Cmd.none
+                                )
+                            
+                            Just _ ->
+                                -- Active round exists - ignore click
+                                ( model, Cmd.none )
 
-                    else if not user.isRay && model.userGuess == Nothing then
-                        -- Regular user making a guess
-                        ( { model | userGuess = Just location }
-                        , Cmd.none
-                        )
+                    else if not user.isRay && model.currentRound /= Nothing then
+                        -- Regular user making a guess (only if there's an active round)
+                        -- Check if they've already submitted their guess
+                        case model.currentRound of
+                            Just round ->
+                                if Dict.member user.telegramUser.id round.guesses then
+                                    -- Guess already submitted, can't change it
+                                    ( model, Cmd.none )
+                                else
+                                    -- Can still adjust guess before submitting
+                                    ( { model | userGuess = Just location }
+                                    , Cmd.none
+                                    )
+                            
+                            Nothing ->
+                                ( model, Cmd.none )
 
                     else
                         ( model, Cmd.none )
@@ -161,7 +179,14 @@ update msg model =
             case model.currentUser of
                 Just user ->
                     if user.isRay then
-                        ( { model | page = GamePage, userGuess = Nothing, showingGuesses = False }
+                        -- Clear the current round and reset UI state so Ray can start a new round
+                        ( { model 
+                            | currentRound = Nothing
+                            , page = GamePage
+                            , userGuess = Nothing
+                            , showingGuesses = False
+                            , pendingLocation = Nothing
+                          }
                         , Cmd.none
                         )
 
@@ -171,11 +196,30 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
+        ConfirmStartRound ->
+            case ( model.currentUser, model.pendingLocation ) of
+                ( Just user, Just location ) ->
+                    if user.isRay then
+                        ( { model | pendingLocation = Nothing }
+                        , Lamdera.sendToBackend (CreateNewRound location)
+                        )
+                    
+                    else
+                        ( model, Cmd.none )
+                
+                _ ->
+                    ( model, Cmd.none )
+
+        CancelPendingLocation ->
+            ( { model | pendingLocation = Nothing }
+            , Cmd.none
+            )
+
         SubmitGuess ->
             case ( model.currentUser, model.userGuess ) of
                 ( Just user, Just guess ) ->
                     if not user.isRay then
-                        ( model
+                        ( { model | userGuess = Nothing }  -- Clear local guess, will be set from broadcast
                         , Lamdera.sendToBackend (SubmitUserGuess guess)
                         )
 
@@ -281,29 +325,30 @@ updateFromBackend msg model =
             , Cmd.none
             )
 
-        GuessSubmitted userId location ->
+        GuessSubmitted guess ->
             case model.currentUser of
                 Just user ->
-                    if userId == user.telegramUser.id then
-                        ( { model | userGuess = Just location }
-                        , Cmd.none
-                        )
+                    let
+                        -- Update the current round with the new guess
+                        updatedModel =
+                            { model
+                                | currentRound =
+                                    case model.currentRound of
+                                        Just round ->
+                                            Just { round | guesses = Dict.insert guess.userId guess round.guesses }
 
-                    else if model.showingGuesses then
-                        ( { model
-                            | currentRound =
-                                case model.currentRound of
-                                    Just round ->
-                                        Just { round | guesses = Dict.insert userId { location = location, userId = userId, userName = "hoi", timestamp = Time.millisToPosix 0, distanceKm = Nothing } round.guesses }
-
-                                    Nothing ->
-                                        Nothing
-                          }
-                        , Cmd.none
-                        )
-
-                    else
-                        ( model, Cmd.none )
+                                        Nothing ->
+                                            Nothing
+                            }
+                        
+                        -- If this is the current user's own guess, also update userGuess
+                        finalModel =
+                            if guess.userId == user.telegramUser.id then
+                                { updatedModel | userGuess = Just guess.location }
+                            else
+                                updatedModel
+                    in
+                    ( finalModel, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -503,11 +548,23 @@ viewRayControls : Model -> Html FrontendMsg
 viewRayControls model =
     case model.currentRound of
         Nothing ->
-            div []
-                [ h3 [] [ text "Start a new round" ]
-                , p [] [ text "Click on the map to set your current location" ]
-                , button [ onClick StartNewRound ] [ text "New Round" ]
-                ]
+            case model.pendingLocation of
+                Just location ->
+                    div [ class "pending-location" ]
+                        [ h3 [] [ text "Confirm Location" ]
+                        , p [] [ text ("Latitude: " ++ String.fromFloat location.lat) ]
+                        , p [] [ text ("Longitude: " ++ String.fromFloat location.lng) ]
+                        , div [ class "button-group" ]
+                            [ button [ class "confirm-btn", onClick ConfirmStartRound ] [ text "✓ Start Round" ]
+                            , button [ class "cancel-btn", onClick CancelPendingLocation ] [ text "✗ Cancel" ]
+                            ]
+                        ]
+                
+                Nothing ->
+                    div []
+                        [ h3 [] [ text "Start a new round" ]
+                        , p [] [ text "Click on the map to set your current location" ]
+                        ]
 
         Just round ->
             if round.isOpen then
@@ -515,7 +572,8 @@ viewRayControls model =
                     [ h3 [] [ text "Round in progress" ]
                     , p [] [ text ("Started: " ++ formatTime round.startTime) ]
                     , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
-                    , viewCurrentGuesses round
+                    , h4 [] [ text "Current Guesses" ]
+                    , viewCurrentGuessesTable round
                     , button [ onClick CloseRound ] [ text "Close Round" ]
                     ]
 
@@ -527,8 +585,8 @@ viewRayControls model =
                     ]
 
 
-viewCurrentGuesses : Round -> Html FrontendMsg
-viewCurrentGuesses round =
+viewCurrentGuessesTable : Round -> Html FrontendMsg
+viewCurrentGuessesTable round =
     let
         guessesWithDistance =
             round.guesses
@@ -571,10 +629,20 @@ viewPlayerControls : Model -> Html FrontendMsg
 viewPlayerControls model =
     case model.currentRound of
         Nothing ->
-            div []
-                [ h3 [] [ text "No active round" ]
-                , p [] [ text "Waiting for Ray to start a new round..." ]
-                ]
+            -- Show most recent round results
+            case List.head model.pastRounds of
+                Just mostRecentRound ->
+                    div []
+                        [ h3 [] [ text "Most Recent Round" ]
+                        , p [] [ text "Waiting for Ray to start a new round..." ]
+                        , viewRoundResults mostRecentRound
+                        ]
+                
+                Nothing ->
+                    div []
+                        [ h3 [] [ text "No active round" ]
+                        , p [] [ text "Waiting for Ray to start the first round..." ]
+                        ]
 
         Just round ->
             if round.isOpen then
@@ -631,6 +699,78 @@ viewGameStatus model user =
 
 viewMap : Model -> Html FrontendMsg
 viewMap model =
+    let
+        markers =
+            case model.currentRound of
+                Just round ->
+                    if round.isOpen then
+                        -- Active open round
+                        case model.currentUser of
+                            Just user ->
+                                if user.isRay then
+                                    -- Ray sees actual location and all guesses
+                                    [ viewMapMarker "piloticon" round.actualLocation [ b [] [ text "Your Location" ], p [] [ text "Where you are" ] ] ]
+                                        ++ (round.guesses
+                                                |> Dict.values
+                                                |> List.map
+                                                    (\guess ->
+                                                        viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                                    )
+                                           )
+                                else
+                                    -- Regular users see their own pending guess (if any)
+                                    case model.userGuess of
+                                        Just guessLocation ->
+                                            [ viewMapMarker "questionicon" guessLocation [ b [] [ text "Your Guess" ], p [] [ text "Click confirm to submit" ] ] ]
+                                        
+                                        Nothing ->
+                                            []
+                            
+                            Nothing ->
+                                []
+                    
+                    else
+                        -- Closed round - show everything
+                        [ viewMapMarker "piloticon" round.actualLocation [ b [] [ text "Actual location" ], p [] [ text "Ray was here" ] ] ]
+                            ++ (round.guesses
+                                    |> Dict.values
+                                    |> List.map
+                                        (\guess ->
+                                            viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                        )
+                               )
+                
+                Nothing ->
+                    -- No active round
+                    case model.currentUser of
+                        Just user ->
+                            if user.isRay then
+                                -- Ray sees pending location
+                                case model.pendingLocation of
+                                    Just location ->
+                                        [ viewMapMarker "piloticon" location [ b [] [ text "Pending Location" ], p [] [ text "Click confirm to start round" ] ] ]
+                                    
+                                    Nothing ->
+                                        []
+                            else
+                                -- Regular users see most recent round
+                                case List.head model.pastRounds of
+                                    Just mostRecentRound ->
+                                        [ viewMapMarker "piloticon" mostRecentRound.actualLocation [ b [] [ text "Last Location" ], p [] [ text "Previous round" ] ] ]
+                                            ++ (mostRecentRound.guesses
+                                                    |> Dict.values
+                                                    |> List.map
+                                                        (\guess ->
+                                                            viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                                        )
+                                               )
+                                    
+                                    Nothing ->
+                                        []
+                        
+                        Nothing ->
+                            []
+    in
     node "leaflet-map"
         [ on "click" clickDecoder, property "worldCopyJump" (Encode.bool True), attribute "zoom" "3", attribute "min-zoom" "3", attribute "max-zoom" "10" ]
         ([ node "leaflet-tilelayer" [ attribute "url" "https://api.maptiler.com/maps/topo-v2/{z}/{x}/{y}.png?key=DswcJkmNhAKYInVuYSU6" ] []
@@ -656,20 +796,7 @@ viewMap model =
             ]
             []
          ]
-            ++ (case model.currentRound of
-                    Just { actualLocation, guesses } ->
-                        [ viewMapMarker "piloticon" actualLocation [ b [] [ text "Actual location" ], p [] [ text "Ray is dus hier" ] ] ]
-                            ++ (guesses
-                                    |> Dict.values
-                                    |> List.map
-                                        (\guess ->
-                                            viewMapMarker "questionicon" guess.location [ b [] [ text <| guess.userName ], p [] [ text "Gokje" ] ]
-                                        )
-                               )
-
-                    Nothing ->
-                        []
-               )
+            ++ markers
         )
 
 
