@@ -695,8 +695,11 @@ viewPlayerControls model =
                                                     1 ->
                                                         "You're the only participant so far"
 
+                                                    2 ->
+                                                        "1 other player made a guess"
+
                                                     count ->
-                                                        "Other players have made " ++ String.fromInt count ++ " guess(es)"
+                                                        String.fromInt count ++ " other players have made guess(es)"
                                                 )
                                             ]
                                         ]
