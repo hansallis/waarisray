@@ -699,7 +699,7 @@ viewPlayerControls model =
                                                         "1 other player made a guess"
 
                                                     count ->
-                                                        String.fromInt count ++ " other players have made guess(es)"
+                                                        String.fromInt (count - 1) ++ " other players have made guess(es)"
                                                 )
                                             ]
                                         ]
