@@ -94,10 +94,18 @@ updateFromFrontend sessionId clientId msg model =
             handleLogout sessionId clientId model
 
         AuthenticateAsRay ->
-            handleTestAuth sessionId clientId True model
+            if Env.mode == Env.Development then
+                handleTestAuth sessionId clientId True model
+
+            else
+                ( model, Cmd.none )
 
         AuthenticateAsRegularUser ->
-            handleTestAuth sessionId clientId False model
+            if Env.mode == Env.Development then
+                handleTestAuth sessionId clientId False model
+
+            else
+                ( model, Cmd.none )
 
         CreateNewRound location ->
             handleCreateNewRound sessionId clientId location model

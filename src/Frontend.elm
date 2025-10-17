@@ -3,6 +3,7 @@ port module Frontend exposing (..)
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Dict
+import Env
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
@@ -497,28 +498,35 @@ viewLoginPage : Html FrontendMsg
 viewLoginPage =
     div [ class "login-page" ]
         [ div [ class "login-container" ]
-            [ h2 [] [ text "Login with Telegram" ]
-            , p [] [ text "Authenticate using Telegram to start guessing Ray's location!" ]
-            , button
+            ([ h2 [] [ text "Login with Telegram" ]
+             , p [] [ text "Authenticate using Telegram to start guessing Ray's location!" ]
+             , button
                 [ class "telegram-login-btn"
                 , onClick InitiateTelegramAuth
                 ]
                 [ text "Login with Telegram" ]
-            , div [ class "test-login-section" ]
-                [ h3 [] [ text "Development Testing" ]
-                , p [] [ text "Quick login buttons for testing:" ]
-                , button
-                    [ class "test-login-btn ray-btn"
-                    , onClick LoginAsRay
-                    ]
-                    [ text "Login as Ray (Pilot) ✈️" ]
-                , button
-                    [ class "test-login-btn user-btn"
-                    , onClick LoginAsRegularUser
-                    ]
-                    [ text "Login as Regular User 👤" ]
-                ]
-            ]
+             ]
+                ++ (if Env.mode == Env.Production then
+                        []
+
+                    else
+                        [ div [ class "test-login-section" ]
+                            [ h3 [] [ text "Development Testing" ]
+                            , p [] [ text "Quick login buttons for testing:" ]
+                            , button
+                                [ class "test-login-btn ray-btn"
+                                , onClick LoginAsRay
+                                ]
+                                [ text "Login as Ray (Pilot) ✈️" ]
+                            , button
+                                [ class "test-login-btn user-btn"
+                                , onClick LoginAsRegularUser
+                                ]
+                                [ text "Login as Regular User 👤" ]
+                            ]
+                        ]
+                   )
+            )
         ]
 
 

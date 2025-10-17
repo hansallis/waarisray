@@ -10,6 +10,10 @@ type Mode
     | Production
 
 
+mode =
+    Development
+
+
 
 -- Default app settings
 
