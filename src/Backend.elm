@@ -290,24 +290,8 @@ urlDecode : String -> String
 urlDecode str =
     str
         |> String.replace "+" " "
-        |> urlDecodePercent
-
-
-
--- Decode percent-encoded characters
-
-
-urlDecodePercent : String -> String
-urlDecodePercent str =
-    -- This is a simplified implementation
-    -- In production, use a proper URL decoding library
-    str
-        |> String.replace "%20" " "
-        |> String.replace "%22" "\""
-        |> String.replace "%7B" "{"
-        |> String.replace "%7D" "}"
-        |> String.replace "%3A" ":"
-        |> String.replace "%2C" ","
+        |> Url.percentDecode
+        |> Maybe.withDefault str
 
 
 
