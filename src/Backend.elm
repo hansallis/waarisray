@@ -346,7 +346,15 @@ handleCreateNewRound sessionId clientId location model =
             if user.isRay then
                 let
                     roundId =
-                        generateRoundId ()
+                        model.rounds
+                            |> Dict.keys
+                            |> List.sort
+                            |> List.reverse
+                            |> List.head
+                            |> Maybe.andThen (String.replace "round_" "" >> String.toInt)
+                            |> Maybe.withDefault 0
+                            |> (+) 1
+                            |> String.fromInt
 
                     newRound =
                         { id = roundId
@@ -599,12 +607,6 @@ getUserFromSession sessionId model =
     model.userSessions
         |> Dict.get sessionId
         |> Maybe.andThen (\userId -> Dict.get userId model.users)
-
-
-generateRoundId : () -> String
-generateRoundId _ =
-    -- Simple ID generation - in production, use proper UUID generation
-    "round_" ++ String.fromInt (Time.posixToMillis (Time.millisToPosix 0))
 
 
 subscriptions : Model -> Sub BackendMsg
