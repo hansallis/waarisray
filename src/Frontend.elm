@@ -304,11 +304,11 @@ updateFromBackend msg model =
                     }
             in
             ( newModel
-            , case currentRound of
-                Just round ->
-                    Cmd.none
-
+            , case currentUser of
                 Nothing ->
+                    authenticateWithTelegram ()
+
+                Just _ ->
                     Cmd.none
             )
 

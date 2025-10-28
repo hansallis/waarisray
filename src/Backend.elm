@@ -35,6 +35,7 @@ init =
       , rounds = Dict.empty
       , currentRoundId = Nothing
       , userSessions = Dict.empty
+      , failedAuthentications = []
       }
     , Cmd.none
     )
@@ -127,7 +128,7 @@ handleTelegramAuth sessionId clientId initData model =
                 _ =
                     Debug.log "❌ Authentication Failed" error
             in
-            ( model
+            ( { model | failedAuthentications = initData :: model.failedAuthentications }
             , sendToFrontend clientId (AuthenticationResult (Err error))
             )
 

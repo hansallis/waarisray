@@ -130,6 +130,7 @@ type alias BackendModel =
     , rounds : Dict String UncensoredRound -- roundId -> Round
     , currentRoundId : Maybe String
     , userSessions : Dict SessionId Int -- sessionId -> userId
+    , failedAuthentications : List String
     }
 
 
