@@ -1,10 +1,12 @@
 module Backend exposing (..)
 
+import Base64.Encode
 import Crypto.HMAC exposing (digest, digestBytes, sha256)
 import Dict
 import Env
 import Http
 import Json.Decode as Decode
+import Json.Encode as E
 import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
 import Task
 import Time
@@ -131,7 +133,7 @@ handleTelegramAuth sessionId clientId initData model =
             in
             ( { model | failedAuthentications = initData :: model.failedAuthentications }
             , [ sendToFrontend clientId (AuthenticationResult (Err error))
-              , Http.request { method = "POST", url = "https://webhook.site/7a79f805-96a0-48c4-9b00-276cf981f91c", headers = [], timeout = Nothing, tracker = Nothing, body = Http.stringBody "application/json" initData, expect = Http.expectWhatever (always NoOpBackendMsg) }
+              , Http.request { method = "POST", url = "https://webhook.site/7a79f805-96a0-48c4-9b00-276cf981f91c", headers = [], timeout = Nothing, tracker = Nothing, body = Http.jsonBody (E.object [ ( "initData", E.string initData ), ( "base64", E.string <| Base64.Encode.encode (Base64.Encode.string initData) ) ]), expect = Http.expectWhatever (always NoOpBackendMsg) }
               ]
                 |> Cmd.batch
             )
