@@ -8,6 +8,7 @@ import Http
 import Json.Decode as Decode
 import Json.Encode as E
 import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
+import String.UTF8
 import Task
 import Time
 import Types exposing (..)
@@ -236,7 +237,7 @@ verifyTelegramAuth initData =
                 |> List.map (\( k, v ) -> k ++ "=" ++ v)
                 |> String.join "\n"
     in
-    case hash |> Debug.log "received hash" of
+    case hash of
         Nothing ->
             Err "Missing hash parameter"
 
@@ -311,7 +312,7 @@ verifyHash dataCheckString providedHash =
 
         -- Convert dataCheckString to bytes
         dataCheckBytes =
-            stringToBytes (dataCheckString |> Url.percentDecode |> Maybe.withDefault "failed to percent decode")
+            String.UTF8.toBytes dataCheckString
 
         -- Step 2: Create hash = HMAC_SHA256(secret_key, data_check_string)
         -- Use digestBytes since the key is now in byte format
@@ -324,15 +325,6 @@ verifyHash dataCheckString providedHash =
     in
     -- Compare the calculated hash with the provided hash (case-insensitive)
     String.toLower calculatedHash == String.toLower providedHash
-
-
-{-| Convert a String to a List of bytes (List Int)
--}
-stringToBytes : String -> List Int
-stringToBytes str =
-    str
-        |> String.toList
-        |> List.map Char.toCode
 
 
 

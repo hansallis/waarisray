@@ -20,7 +20,9 @@
             "ktonon/elm-crypto": "1.1.2",
             "ktonon/elm-word": "2.1.2",
             "lamdera/codecs": "1.0.0",
-            "lamdera/core": "1.0.0"
+            "lamdera/core": "1.0.0",
+            "miniBill/elm-unicode": "1.1.1",
+            "zwilias/elm-utf-tools": "2.0.1"
         },
         "indirect": {
             "elm/file": "1.0.5",
