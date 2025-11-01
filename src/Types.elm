@@ -116,6 +116,7 @@ type alias FrontendModel =
     , pendingLocation : Maybe Location -- Ray's pending location before confirming
     , mapCenter : Location
     , mapZoom : Int
+    , avatarList : List ( Int, String )
     , error : Maybe String
     , authData : Maybe String -- Telegram auth data
     }
@@ -204,6 +205,7 @@ type ToFrontend
         , currentRound : Maybe FrontendRound
         , usersGuess : Maybe Location
         , pastRounds : List UncensoredRound
+        , avatarList : List ( Int, String )
         }
     | RoundCreated CensoredRound
     | GuessSubmitted Guess -- Full guess with all info

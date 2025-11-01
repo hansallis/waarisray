@@ -659,3 +659,102 @@ svg.leaflet-image-layer.leaflet-interactive path {
 		print-color-adjust: exact;
 		}
 	}
+
+
+
+
+
+.marker-wrapper {
+	display: inline-block;
+	position: relative;
+	margin: 20px;
+}
+
+/* Map marker container */
+.map-marker {
+	position: relative;
+	width: 80px;
+	height: 100px;
+	display: inline-block;
+	filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
+}
+
+/* Marker pin shape using pseudo-elements */
+.map-marker::before {
+	content: '';
+	position: absolute;
+	width: 80px;
+	height: 80px;
+	background: white;
+	border-radius: 50% 50% 50% 0;
+	transform: rotate(-45deg);
+	top: 0;
+	left: 0;
+	border: 4px solid #2c3e50;
+	box-sizing: border-box;
+}
+
+/* Avatar image container */
+.avatar-container {
+	position: absolute;
+	top: 8px;
+	left: 12px;
+	width: 56px;
+	height: 56px;
+	border-radius: 50%;
+	overflow: hidden;
+	background: white;
+	z-index: 1;
+	border: 3px solid #3498db;
+	box-sizing: border-box;
+}
+
+.avatar-image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* Additional styling variations */
+.marker-wrapper h2 {
+	color: white;
+	margin-top: 20px;
+	font-size: 18px;
+	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Multiple size variations */
+.marker-large {
+	width: 120px;
+	height: 150px;
+}
+
+.marker-large::before {
+	width: 120px;
+	height: 120px;
+}
+
+.marker-large .avatar-container {
+	top: 12px;
+	left: 18px;
+	width: 84px;
+	height: 84px;
+}
+
+.marker-small {
+	width: 50px;
+	height: 62px;
+}
+
+.marker-small::before {
+	width: 50px;
+	height: 50px;
+}
+
+.marker-small .avatar-container {
+	top: 5px;
+	left: 7.5px;
+	width: 35px;
+	height: 35px;
+	border-width: 2px;
+}

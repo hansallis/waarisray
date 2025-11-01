@@ -154,6 +154,7 @@ handleLogout sessionId clientId model =
             , currentRound = Nothing
             , usersGuess = Nothing
             , pastRounds = []
+            , avatarList = []
             }
     in
     ( newModel
@@ -540,6 +541,7 @@ handleRequestGameState sessionId clientId model =
                     _ ->
                         Nothing
             , pastRounds = pastRounds
+            , avatarList = model.users |> Dict.values |> List.map .telegramUser |> List.filterMap (\{ id, photoUrl } -> photoUrl |> Maybe.map (\justPhotoUrl -> ( id, justPhotoUrl )))
             }
     in
     ( model
@@ -564,6 +566,7 @@ handleRequestRoundHistory sessionId clientId model =
             , currentRound = Nothing
             , usersGuess = Nothing
             , pastRounds = pastRounds
+            , avatarList = []
             }
     in
     ( model

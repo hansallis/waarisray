@@ -54,6 +54,7 @@ init url key =
       , pastRounds = []
       , userGuess = Nothing
       , pendingLocation = Nothing
+      , avatarList = []
       , mapCenter = initialLocation
       , mapZoom = 2
       , error = Nothing
@@ -789,6 +790,26 @@ viewGameStatus model user =
 viewMap : Model -> Html FrontendMsg
 viewMap model =
     let
+        avatarIcons =
+            model.avatarList
+                |> List.map
+                    (\( id_, url ) ->
+                        node "leaflet-divicon"
+                            [ attribute "icon-anchor-x" "45"
+                            , attribute "icon-anchor-y" "85"
+                            , id ("icon-" ++ String.fromInt id_)
+                            ]
+                            [ div [ class "marker-wrapper" ]
+                                [ div [ class "map-marker marker-small" ]
+                                    [ div [ class "avatar-container" ]
+                                        [ img [ alt "User Avatar", class "avatar-image", src url ]
+                                            []
+                                        ]
+                                    ]
+                                ]
+                            ]
+                    )
+
         markers =
             case model.currentRound of
                 Just (Uncensored round) ->
@@ -902,6 +923,7 @@ viewMap model =
             ]
             []
          ]
+            ++ avatarIcons
             ++ markers
         )
 
