@@ -566,7 +566,7 @@ handleRequestRoundHistory sessionId clientId model =
             , currentRound = Nothing
             , usersGuess = Nothing
             , pastRounds = pastRounds
-            , avatarList = []
+            , avatarList = model.users |> Dict.values |> List.map .telegramUser |> List.filterMap (\{ id, photoUrl } -> photoUrl |> Maybe.map (\justPhotoUrl -> ( id, justPhotoUrl )))
             }
     in
     ( model

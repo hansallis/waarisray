@@ -277,7 +277,7 @@ updateFromBackend msg model =
             , Cmd.none
             )
 
-        GameStateUpdate { currentUser, currentRound, usersGuess, pastRounds } ->
+        GameStateUpdate { currentUser, currentRound, usersGuess, pastRounds, avatarList } ->
             let
                 _ =
                     Debug.log "🔄 GameStateUpdate received"
@@ -302,6 +302,7 @@ updateFromBackend msg model =
                         , userGuess = usersGuess
                         , pastRounds = pastRounds
                         , page = newPage
+                        , avatarList = avatarList
                     }
             in
             ( newModel
