@@ -812,6 +812,18 @@ viewMap model =
                     )
 
         markers =
+            let
+                icon : Int -> Bool -> String
+                icon userId isRay =
+                    if List.member userId (model.avatarList |> List.map Tuple.first) then
+                        "icon-" ++ String.fromInt userId
+
+                    else if isRay then
+                        "piloticon"
+
+                    else
+                        "questionicon"
+            in
             case model.currentRound of
                 Just (Uncensored round) ->
                     if round.isOpen then
@@ -820,12 +832,12 @@ viewMap model =
                             Just user ->
                                 if user.isRay then
                                     -- Ray sees actual location and all guesses
-                                    [ viewMapMarker "piloticon" round.actualLocation [ b [] [ text "Your Location" ], p [] [ text "Where you are" ] ] ]
+                                    [ viewMapMarker (icon user.telegramUser.id user.isRay) round.actualLocation [ b [] [ text "Your Location" ], p [] [ text "Where you are" ] ] ]
                                         ++ (round.guesses
                                                 |> Dict.values
                                                 |> List.map
                                                     (\guess ->
-                                                        viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                                        viewMapMarker (icon guess.userId False) guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
                                                     )
                                            )
 
@@ -833,7 +845,7 @@ viewMap model =
                                     -- Regular users see their own pending guess (if any)
                                     case model.userGuess of
                                         Just guessLocation ->
-                                            [ viewMapMarker "questionicon" guessLocation [ b [] [ text "Your Guess" ], p [] [ text "Click confirm to submit" ] ] ]
+                                            [ viewMapMarker (icon user.telegramUser.id False) guessLocation [ b [] [ text "Your Guess" ], p [] [ text "Click confirm to submit" ] ] ]
 
                                         Nothing ->
                                             []
@@ -848,7 +860,7 @@ viewMap model =
                                     |> Dict.values
                                     |> List.map
                                         (\guess ->
-                                            viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                            viewMapMarker (icon guess.userId False) guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
                                         )
                                )
 
@@ -859,7 +871,7 @@ viewMap model =
                             -- Regular users see their own pending guess (if any)
                             case model.userGuess of
                                 Just guessLocation ->
-                                    [ viewMapMarker "questionicon" guessLocation [ b [] [ text "Your Guess" ], p [] [ text "Click confirm to submit" ] ] ]
+                                    [ viewMapMarker (icon user.telegramUser.id False) guessLocation [ b [] [ text "Your Guess" ], p [] [ text "Click confirm to submit" ] ] ]
 
                                 Nothing ->
                                     []
@@ -889,7 +901,7 @@ viewMap model =
                                                     |> Dict.values
                                                     |> List.map
                                                         (\guess ->
-                                                            viewMapMarker "questionicon" guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                                            viewMapMarker (icon guess.userId False) guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
                                                         )
                                                )
 
