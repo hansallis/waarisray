@@ -803,7 +803,7 @@ viewMap model =
                             [ div [ class "marker-wrapper" ]
                                 [ div [ class "map-marker marker-small" ]
                                     [ div [ class "avatar-container" ]
-                                        [ img [ alt "User Avatar", class "avatar-image", src url ]
+                                        [ img [ alt "User Avatar", class "avatar-image", src <| Maybe.withDefault url <| Url.percentDecode url ]
                                             []
                                         ]
                                     ]
