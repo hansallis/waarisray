@@ -832,7 +832,7 @@ viewMap model =
                             Just user ->
                                 if user.isRay then
                                     -- Ray sees actual location and all guesses
-                                    [ viewMapMarker (icon user.telegramUser.id user.isRay) round.actualLocation [ b [] [ text "Your Location" ], p [] [ text "Where you are" ] ] ]
+                                    [ viewMapMarker (icon Env.appConfig.rayTelegramId True) round.actualLocation [ b [] [ text "Your Location" ], p [] [ text "Where you are" ] ] ]
                                         ++ (round.guesses
                                                 |> Dict.values
                                                 |> List.map
@@ -855,7 +855,7 @@ viewMap model =
 
                     else
                         -- Closed round - show everything
-                        [ viewMapMarker "piloticon" round.actualLocation [ b [] [ text "Actual location" ], p [] [ text "Ray was here" ] ] ]
+                        [ viewMapMarker (icon Env.appConfig.rayTelegramId True) round.actualLocation [ b [] [ text "Actual location" ], p [] [ text "Ray was here" ] ] ]
                             ++ (round.guesses
                                     |> Dict.values
                                     |> List.map
@@ -887,7 +887,7 @@ viewMap model =
                                 -- Ray sees pending location
                                 case model.pendingLocation of
                                     Just location ->
-                                        [ viewMapMarker "piloticon" location [ b [] [ text "Pending Location" ], p [] [ text "Click confirm to start round" ] ] ]
+                                        [ viewMapMarker (icon Env.appConfig.rayTelegramId True) location [ b [] [ text "Pending Location" ], p [] [ text "Click confirm to start round" ] ] ]
 
                                     Nothing ->
                                         []
@@ -896,7 +896,7 @@ viewMap model =
                                 -- Regular users see most recent round
                                 case List.head model.pastRounds of
                                     Just mostRecentRound ->
-                                        [ viewMapMarker "piloticon" mostRecentRound.actualLocation [ b [] [ text "Last Location" ], p [] [ text "Previous round" ] ] ]
+                                        [ viewMapMarker (icon Env.appConfig.rayTelegramId True) mostRecentRound.actualLocation [ b [] [ text "Last Location" ], p [] [ text "Previous round" ] ] ]
                                             ++ (mostRecentRound.guesses
                                                     |> Dict.values
                                                     |> List.map
