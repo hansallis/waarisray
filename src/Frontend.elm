@@ -947,7 +947,7 @@ viewMapMarker icon location popup =
         |> List.map
             (\latOffset ->
                 node "leaflet-marker"
-                    [ attribute "icon" icon, attribute "latitude" (location.lat + latOffset |> String.fromFloat), attribute "longitude" (location.lng |> String.fromFloat), attribute "title" "Actual location" ]
+                    [ attribute "icon" icon, attribute "latitude" (location.lat + latOffset |> String.fromFloat), attribute "longitude" (location.lng |> String.fromFloat) ]
                     popup
             )
 
