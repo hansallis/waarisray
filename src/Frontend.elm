@@ -345,7 +345,7 @@ updateFromBackend msg model =
                                                     Just (Uncensored { rnd | guesses = Dict.insert guess.userId guess rnd.guesses })
 
                                                 Censored rnd ->
-                                                    Just (Censored { rnd | guesses = Dict.insert guess.userId () rnd.guesses })
+                                                    Just (Censored { rnd | guesses = Dict.insert guess.userId { userId = guess.userId, userName = guess.userName, location = guess.location, timestamp = guess.timestamp } rnd.guesses })
 
                                         Nothing ->
                                             Nothing
@@ -866,7 +866,7 @@ viewMap model =
 
                 Just (Censored round) ->
                     -- Active open round
-                    case model.currentUser of
+                    (case model.currentUser of
                         Just user ->
                             -- Regular users see their own pending guess (if any)
                             case model.userGuess of
@@ -878,6 +878,14 @@ viewMap model =
 
                         Nothing ->
                             []
+                    )
+                        ++ (round.guesses
+                                |> Dict.values
+                                |> List.map
+                                    (\guess ->
+                                        viewMapMarker (icon guess.userId False) guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                    )
+                           )
 
                 Nothing ->
                     -- No active round

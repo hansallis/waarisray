@@ -45,8 +45,16 @@ type alias Guess =
     }
 
 
+type alias CensoredGuess =
+    { userId : Int
+    , userName : String
+    , location : Location
+    , timestamp : Time.Posix
+    }
+
+
 type alias CensoredRound =
-    Round () ()
+    Round () CensoredGuess
 
 
 type alias UncensoredRound =
@@ -74,7 +82,7 @@ censorRound { id, actualLocation, startTime, endTime, guesses, isOpen } =
     , actualLocation = ()
     , startTime = startTime
     , endTime = endTime
-    , guesses = Dict.map (always (always ())) guesses
+    , guesses = Dict.map (always (\{ userId, userName, location, timestamp } -> { userId = userId, userName = userName, location = location, timestamp = timestamp })) guesses
     , isOpen = isOpen
     }
 
