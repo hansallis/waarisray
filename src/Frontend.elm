@@ -945,9 +945,9 @@ viewMapMarker : String -> Location -> List (Html msg) -> List (Html msg)
 viewMapMarker icon location popup =
     [ -360, 0, 360 ]
         |> List.map
-            (\latOffset ->
+            (\lngOffset ->
                 node "leaflet-marker"
-                    [ attribute "icon" icon, attribute "latitude" (location.lat + latOffset |> String.fromFloat), attribute "longitude" (location.lng |> String.fromFloat) ]
+                    [ attribute "icon" icon, attribute "latitude" (location.lat |> String.fromFloat), attribute "longitude" (location.lng + lngOffset |> String.fromFloat) ]
                     popup
             )
 
