@@ -937,15 +937,19 @@ viewMap model =
             []
          ]
             ++ avatarIcons
-            ++ markers
+            ++ (markers |> List.concat)
         )
 
 
-viewMapMarker : String -> Location -> List (Html msg) -> Html msg
+viewMapMarker : String -> Location -> List (Html msg) -> List (Html msg)
 viewMapMarker icon location popup =
-    node "leaflet-marker"
-        [ attribute "icon" icon, attribute "latitude" (location.lat |> String.fromFloat), attribute "longitude" (location.lng |> String.fromFloat), attribute "title" "Actual location" ]
-        popup
+    [ -360, 0, 360 ]
+        |> List.map
+            (\latOffset ->
+                node "leaflet-marker"
+                    [ attribute "icon" icon, attribute "latitude" (location.lat + latOffset |> String.fromFloat), attribute "longitude" (location.lng |> String.fromFloat), attribute "title" "Actual location" ]
+                    popup
+            )
 
 
 clickDecoder : Decode.Decoder FrontendMsg
