@@ -1,4 +1,9 @@
 import 'leaflet-element'
+import dayjs from 'dayjs'
+import locale_nl from 'dayjs/locale/nl'
+import calendar from 'dayjs/plugin/calendar'
+import timezone from 'dayjs/plugin/timezone'
+import utc from 'dayjs/plugin/utc'
 
 // Types for ambient globals
 declare global {
@@ -12,6 +17,85 @@ let map: any | undefined;
 
 // Ensure this file is treated as a module so global augmentation is valid
 export {};
+
+
+
+dayjs.extend(calendar)
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
+class CalendarTime extends HTMLElement {
+    set startWithLowerCase(value: boolean) {
+        this._startWithLowerCase = value;
+        this.updateContent();
+    }
+    set prefixIfPast(value: string) {
+        this._prefixIfPast = value;
+        this.updateContent();
+    }
+    set prefixIfFuture(value: string) {
+        this._prefixIfFuture = value;
+        this.updateContent();
+    }
+    private datetime: string;
+    private _startWithLowerCase: boolean;
+    private _prefixIfPast: string;
+    private _prefixIfFuture: string;
+
+    // connect component
+    connectedCallback() {
+        this.updateContent()
+    }
+
+    private lowercaseFirstLetter = (string : string) => {
+        return string.charAt(0).toLowerCase() + string.slice(1);
+    }
+
+    updateContent() {
+        let content = dayjs(this.datetime).tz("Europe/Amsterdam").locale("en").calendar(null, {
+            sameDay: '[Today at] ' + locale_nl.formats.LT, // The same day ( Today at 14:30 )
+            nextDay: '[Tomorrow at] ' + locale_nl.formats.LT, // The next day ( Tomorrow at 14:30 )
+            nextWeek: 'dddd [at] ' + locale_nl.formats.LT, // The next week ( Sunday at 14:30 )
+            lastDay: '[Yesterday at] ' + locale_nl.formats.LT, // The day before ( Yesterday at 14:30 )
+            lastWeek: '[Last] dddd [om] ' + locale_nl.formats.LT, // Last week ( Last Monday at 14:30 )
+            sameElse: locale_nl.formats.L + ' [at] ' + locale_nl.formats.LT // Everything else ( 17/10/2011 14:30 )
+        });
+
+        if (this._startWithLowerCase) {
+            content = this.lowercaseFirstLetter(content);
+        }
+        if (dayjs(this.datetime).isBefore(dayjs())) {
+            content = (this._prefixIfPast ?? '') + content;
+        } else {
+            content = (this._prefixIfFuture ?? '') + content;
+        }
+        this.textContent = content;
+    }
+
+    static get observedAttributes() {
+        return ['datetime'];
+    }
+
+    constructor() {
+        super();
+        this.datetime = null;
+        this._startWithLowerCase = false;
+    }
+
+    attributeChangedCallback(property: string, oldValue: any, newValue: string) {
+        if (oldValue === newValue) return;
+        switch (property) {
+            case "datetime":
+                this.datetime = newValue;
+                this.updateContent();
+        }
+
+
+    }
+}
+if (undefined === window.customElements.get('calendar-time')) {
+    customElements.define('calendar-time', CalendarTime);
+}
 
 // Global variables for map functionality
 // let map = null;

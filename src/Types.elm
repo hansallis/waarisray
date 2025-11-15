@@ -77,9 +77,8 @@ toCensoredRound round =
 
 
 censorRound : UncensoredRound -> CensoredRound
-censorRound { id, actualLocation, startTime, endTime, guesses, isOpen } =
-    { id = id
-    , actualLocation = ()
+censorRound { actualLocation, startTime, endTime, guesses, isOpen } =
+    { actualLocation = ()
     , startTime = startTime
     , endTime = endTime
     , guesses = Dict.map (always (\{ userId, userName, location, timestamp } -> { userId = userId, userName = userName, location = Just location, timestamp = timestamp })) guesses
@@ -93,8 +92,7 @@ fullyCensorRound =
 
 
 type alias Round actualLocationType guessType =
-    { id : String
-    , actualLocation : actualLocationType
+    { actualLocation : actualLocationType
     , startTime : Time.Posix
     , endTime : Maybe Time.Posix
     , guesses : Dict Int guessType -- userId -> Guess
@@ -111,7 +109,7 @@ type RoundStatus
 type Page
     = LoginPage
     | GamePage
-    | ResultsPage String -- Round ID
+    | ResultsPage Int -- Round Index
     | HistoryPage
 
 
@@ -141,10 +139,10 @@ type alias FrontendModel =
 
 type alias BackendModel =
     { users : Dict Int User -- userId -> User
-    , rounds : Dict String UncensoredRound -- roundId -> Round
-    , currentRoundId : Maybe String
+    , rounds : List UncensoredRound -- roundId -> Round
     , userSessions : Dict SessionId Int -- sessionId -> userId
     , failedAuthentications : List String
+    , now : Time.Posix
     }
 
 
@@ -170,7 +168,7 @@ type FrontendMsg
     | CancelPendingLocation
     | SubmitGuess
     | CloseRound
-    | ViewRound String
+    | ViewRound Int
     | GoToHistory
     | GoToGame
     | -- UI
@@ -184,6 +182,7 @@ type FrontendMsg
 
 type BackendMsg
     = NoOpBackendMsg
+    | Tick Time.Posix
 
 
 

@@ -36,10 +36,10 @@ app =
 init : ( Model, Cmd BackendMsg )
 init =
     ( { users = Dict.empty
-      , rounds = Dict.empty
-      , currentRoundId = Nothing
+      , rounds = []
       , userSessions = Dict.empty
       , failedAuthentications = []
+      , now = Time.millisToPosix 0
       }
     , Cmd.none
     )
@@ -54,6 +54,9 @@ update msg model =
     case msg of
         NoOpBackendMsg ->
             ( model, Cmd.none )
+
+        Tick now ->
+            ( { model | now = now }, Cmd.none )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
@@ -416,21 +419,9 @@ handleCreateNewRound sessionId clientId location model =
         Just user ->
             if user.isRay then
                 let
-                    roundId =
-                        model.rounds
-                            |> Dict.keys
-                            |> List.sort
-                            |> List.reverse
-                            |> List.head
-                            |> Maybe.andThen (String.replace "round_" "" >> String.toInt)
-                            |> Maybe.withDefault 0
-                            |> (+) 1
-                            |> String.fromInt
-
                     newRound =
-                        { id = roundId
-                        , actualLocation = location
-                        , startTime = Time.millisToPosix 0 -- Will be set properly with Time.now
+                        { actualLocation = location
+                        , startTime = model.now -- Will be set properly with Time.now
                         , endTime = Nothing
                         , guesses = Dict.empty
                         , isOpen = True
@@ -438,8 +429,7 @@ handleCreateNewRound sessionId clientId location model =
 
                     newModel =
                         { model
-                            | rounds = Dict.insert roundId newRound model.rounds
-                            , currentRoundId = Just roundId
+                            | rounds = newRound :: model.rounds
                         }
                 in
                 ( newModel
@@ -463,16 +453,16 @@ handleCreateNewRound sessionId clientId location model =
 
 handleSubmitGuess : SessionId -> ClientId -> Location -> Model -> ( Model, Cmd BackendMsg )
 handleSubmitGuess sessionId clientId location model =
-    case ( getUserFromSession sessionId model, model.currentRoundId ) of
-        ( Just user, Just roundId ) ->
+    case getUserFromSession sessionId model of
+        Just user ->
             if user.isRay then
                 ( model
                 , sendToFrontend clientId (ErrorMessage "Ray cannot submit guesses")
                 )
 
             else
-                case Dict.get roundId model.rounds of
-                    Just round ->
+                case model.rounds of
+                    round :: oldRounds ->
                         if round.isOpen then
                             if Dict.member user.telegramUser.id round.guesses then
                                 ( model
@@ -485,7 +475,7 @@ handleSubmitGuess sessionId clientId location model =
                                         { userId = user.telegramUser.id
                                         , userName = user.telegramUser.firstName
                                         , location = location
-                                        , timestamp = Time.millisToPosix 0 -- Will be set properly
+                                        , timestamp = model.now -- Will be set properly
                                         , distanceKm = Nothing -- Calculated when round closes
                                         }
 
@@ -493,7 +483,7 @@ handleSubmitGuess sessionId clientId location model =
                                         { round | guesses = Dict.insert user.telegramUser.id guess round.guesses }
 
                                     newModel =
-                                        { model | rounds = Dict.insert roundId updatedRound model.rounds }
+                                        { model | rounds = updatedRound :: oldRounds }
                                 in
                                 ( newModel
                                 , [ broadcastGuessSubmitted guess model
@@ -507,29 +497,24 @@ handleSubmitGuess sessionId clientId location model =
                             , sendToFrontend clientId (ErrorMessage "This round is closed")
                             )
 
-                    Nothing ->
+                    [] ->
                         ( model
-                        , sendToFrontend clientId (ErrorMessage "Round not found")
+                        , sendToFrontend clientId (ErrorMessage "No active round")
                         )
 
-        ( Nothing, _ ) ->
+        Nothing ->
             ( model
             , sendToFrontend clientId (ErrorMessage "Authentication required")
-            )
-
-        ( _, Nothing ) ->
-            ( model
-            , sendToFrontend clientId (ErrorMessage "No active round")
             )
 
 
 handleEndRound : SessionId -> ClientId -> Model -> ( Model, Cmd BackendMsg )
 handleEndRound sessionId clientId model =
-    case ( getUserFromSession sessionId model, model.currentRoundId ) of
-        ( Just user, Just roundId ) ->
+    case getUserFromSession sessionId model of
+        Just user ->
             if user.isRay then
-                case Dict.get roundId model.rounds of
-                    Just round ->
+                case model.rounds of
+                    round :: tail ->
                         let
                             -- Calculate distances for all guesses
                             updatedGuesses =
@@ -544,14 +529,13 @@ handleEndRound sessionId clientId model =
                             closedRound =
                                 { round
                                     | isOpen = False
-                                    , endTime = Just (Time.millisToPosix 0) -- Will be set properly
+                                    , endTime = Just model.now -- Will be set properly
                                     , guesses = updatedGuesses
                                 }
 
                             newModel =
                                 { model
-                                    | rounds = Dict.insert roundId closedRound model.rounds
-                                    , currentRoundId = Nothing
+                                    | rounds = closedRound :: tail
                                 }
 
                             -- Helper: pad a string to a fixed width (right-padded with spaces)
@@ -645,7 +629,7 @@ handleEndRound sessionId clientId model =
                             |> Cmd.batch
                         )
 
-                    Nothing ->
+                    [] ->
                         ( model
                         , sendToFrontend clientId (ErrorMessage "Round not found")
                         )
@@ -655,14 +639,9 @@ handleEndRound sessionId clientId model =
                 , sendToFrontend clientId (ErrorMessage "Only Ray can end rounds")
                 )
 
-        ( Nothing, _ ) ->
+        Nothing ->
             ( model
             , sendToFrontend clientId (ErrorMessage "Authentication required")
-            )
-
-        ( _, Nothing ) ->
-            ( model
-            , sendToFrontend clientId (ErrorMessage "No active round")
             )
 
 
@@ -684,12 +663,12 @@ handleRequestGameState sessionId clientId model =
                 }
 
         currentRound =
-            model.currentRoundId
-                |> Maybe.andThen (\roundId -> Dict.get roundId model.rounds)
+            List.head model.rounds
 
         pastRounds =
             model.rounds
-                |> Dict.values
+                |> List.tail
+                |> Maybe.withDefault []
                 |> List.filter (not << .isOpen)
                 |> List.sortBy (.startTime >> Time.posixToMillis >> negate)
 
@@ -730,7 +709,6 @@ handleRequestRoundHistory sessionId clientId model =
     let
         pastRounds =
             model.rounds
-                |> Dict.values
                 |> List.filter (not << .isOpen)
                 |> List.sortBy (.startTime >> Time.posixToMillis >> negate)
 
@@ -782,4 +760,4 @@ getUserFromSession sessionId model =
 
 subscriptions : Model -> Sub BackendMsg
 subscriptions _ =
-    Sub.none
+    Time.every 1000 Tick

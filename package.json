@@ -2,6 +2,7 @@
   "dependencies": {
     "@types/leaflet": "^1.9.21",
     "@types/telegram-web-app": "^9.0.0",
+    "dayjs": "^1.11.19",
     "leaflet": "^1.9.4",
     "leaflet-element": "^0.0.22",
     "ts-loader": "^9.5.2",

@@ -7,9 +7,11 @@ import Env
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
+import Iso8601
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Lamdera
+import List.Extra
 import Maybe.Extra
 import Time
 import Types exposing (..)
@@ -252,9 +254,16 @@ update msg model =
             )
 
         GoToGame ->
-            ( { model | page = GamePage }
-            , Lamdera.sendToBackend RequestCurrentGameState
-            )
+            case model.page of
+                ResultsPage _ ->
+                    ( { model | page = HistoryPage }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( { model | page = GamePage }
+                    , Lamdera.sendToBackend RequestCurrentGameState
+                    )
 
         ClearError ->
             ( { model | error = Nothing }
@@ -285,6 +294,7 @@ updateFromBackend msg model =
                         { currentUser = Maybe.map (.telegramUser >> .firstName) currentUser
                         , currentPage = model.page
                         , hasCurrentRound = currentRound /= Nothing
+                        , pastRounds = pastRounds
                         }
 
                 -- If we receive a currentUser and we're on login page, go to game page
@@ -315,16 +325,16 @@ updateFromBackend msg model =
                     Cmd.none
             )
 
-        RoundCreated { id, actualLocation, startTime, endTime, guesses, isOpen } ->
+        RoundCreated { actualLocation, startTime, endTime, guesses, isOpen } ->
             ( { model
                 | currentRound =
                     Just
                         (case ( model.pendingLocation, model.currentUser |> Maybe.map .isRay |> Maybe.withDefault False ) of
                             ( Just actualLoc, True ) ->
-                                Uncensored { id = id, actualLocation = actualLoc, startTime = startTime, endTime = endTime, guesses = Dict.empty, isOpen = isOpen }
+                                Uncensored { actualLocation = actualLoc, startTime = startTime, endTime = endTime, guesses = Dict.empty, isOpen = isOpen }
 
                             _ ->
-                                Censored { id = id, actualLocation = actualLocation, startTime = startTime, endTime = endTime, guesses = guesses, isOpen = isOpen }
+                                Censored { actualLocation = actualLocation, startTime = startTime, endTime = endTime, guesses = guesses, isOpen = isOpen }
                         )
               }
             , Cmd.none
@@ -462,7 +472,19 @@ viewHeader model =
                             [ text "Game" ]
                         , button
                             [ onClick GoToHistory
-                            , classList [ ( "active", model.page == HistoryPage ) ]
+                            , classList
+                                [ ( "active"
+                                  , case model.page of
+                                        HistoryPage ->
+                                            True
+
+                                        ResultsPage _ ->
+                                            True
+
+                                        _ ->
+                                            False
+                                  )
+                                ]
                             ]
                             [ text "History" ]
                         ]
@@ -589,7 +611,7 @@ viewRayControls model =
             if round.isOpen then
                 div []
                     [ h3 [] [ text "Round in progress" ]
-                    , p [] [ text ("Started: " ++ formatTime round.startTime) ]
+                    , p [] [ text "Started: ", relativeTime True Nothing round.startTime ]
                     , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
                     ]
 
@@ -603,7 +625,7 @@ viewRayControls model =
             if round.isOpen then
                 div []
                     [ h3 [] [ text "Round in progress" ]
-                    , p [] [ text ("Started: " ++ formatTime round.startTime) ]
+                    , p [] [ text "Started: ", relativeTime True Nothing round.startTime ]
                     , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
                     , h4 [] [ text "Current Guesses" ]
                     , viewCurrentGuessesTable round
@@ -775,10 +797,10 @@ viewGameStatus model user =
             div [ class "game-status" ]
                 [ h4 [] [ text "Round Status" ]
                 , p [] [ text "Created by: Ray" ]
-                , p [] [ text ("Started: " ++ formatTime round.startTime) ]
+                , p [] [ text "Started: ", relativeTime True Nothing round.startTime ]
                 , case round.endTime of
                     Just endTime ->
-                        p [] [ text ("Ended: " ++ formatTime endTime) ]
+                        p [] [ text "Ended: ", relativeTime True Nothing endTime ]
 
                     Nothing ->
                         p [] [ text "Status: Open" ]
@@ -975,26 +997,26 @@ clickDecoder =
         |> Decode.map MapClicked
 
 
-viewResultsPage : Model -> String -> Html FrontendMsg
-viewResultsPage model roundId =
+viewResultsPage : Model -> Int -> Html FrontendMsg
+viewResultsPage model roundIndex =
     let
         round =
             model.pastRounds
-                |> List.filter (\r -> r.id == roundId)
-                |> List.head
+                |> List.reverse
+                |> List.Extra.getAt roundIndex
     in
     case round of
         Just r ->
             div [ class "results-page" ]
                 [ h2 [] [ text "Round Results" ]
                 , viewRoundResults r
-                , button [ onClick GoToGame ] [ text "Back to Game" ]
+                , button [ onClick GoToGame ] [ text "Back" ]
                 ]
 
         Nothing ->
             div [ class "results-page" ]
                 [ h2 [] [ text "Round not found" ]
-                , button [ onClick GoToGame ] [ text "Back to Game" ]
+                , button [ onClick GoToGame ] [ text "Back" ]
                 ]
 
 
@@ -1008,24 +1030,25 @@ viewHistoryPage model =
           else
             div [ class "rounds-list" ]
                 (model.pastRounds
-                    |> List.map (censorRound >> viewRoundSummary)
+                    |> List.reverse
+                    |> List.indexedMap (\index round -> censorRound round |> viewRoundSummary index)
                 )
         ]
 
 
-viewRoundSummary : CensoredRound -> Html FrontendMsg
-viewRoundSummary round =
+viewRoundSummary : Int -> CensoredRound -> Html FrontendMsg
+viewRoundSummary roundIndex round =
     div [ class "round-summary" ]
-        [ h4 [] [ text ("Round " ++ round.id) ]
-        , p [] [ text ("Started: " ++ formatTime round.startTime) ]
+        [ h4 [] [ text ("Round " ++ String.fromInt (roundIndex + 1)) ]
+        , p [] [ text "Started: ", relativeTime True Nothing round.startTime ]
         , case round.endTime of
             Just endTime ->
-                p [] [ text ("Ended: " ++ formatTime endTime) ]
+                p [] [ text "Ended: ", relativeTime True Nothing endTime ]
 
             Nothing ->
                 text ""
         , p [] [ text ("Guesses: " ++ String.fromInt (Dict.size round.guesses)) ]
-        , button [ onClick (ViewRound round.id) ] [ text "View Details" ]
+        , button [ onClick (ViewRound roundIndex) ] [ text "View Details" ]
         ]
 
 
@@ -1066,10 +1089,17 @@ viewRoundResults round =
 -- HELPER FUNCTIONS
 
 
-formatTime : Time.Posix -> String
-formatTime time =
-    -- Simple time formatting - in a real app you'd use a proper time library
-    String.fromInt (Time.posixToMillis time)
+relativeTime : Bool -> Maybe { prefixIfPast : String, prefixIfFuture : String } -> Time.Posix -> Html.Html msg
+relativeTime startWithLowerCase prefixes time =
+    Html.node "calendar-time"
+        ([ Just <| attribute "datetime" (Iso8601.fromTime time)
+         , Just <| property "startWithLowerCase" (Encode.bool startWithLowerCase)
+         , prefixes |> Maybe.map (.prefixIfPast >> Encode.string >> property "prefixIfPast")
+         , prefixes |> Maybe.map (.prefixIfFuture >> Encode.string >> property "prefixIfFuture")
+         ]
+            |> Maybe.Extra.values
+        )
+        []
 
 
 
