@@ -40,10 +40,12 @@ telegramConfig :
     { botUsername : String
     , botToken : String
     , webAppUrl : String
+    , code15id : String
     }
 telegramConfig =
     { botUsername = "whereisraybot" -- Replace with your bot username
     , botToken = "8075877814:AAHWMuUZsbM-9aBUpCmf_t-SKMzE9FzB5JU" -- Replace with your actual bot token from @BotFather
+    , code15id = "-1001958086768"
     , webAppUrl =
         case mode of
             Development ->

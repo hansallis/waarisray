@@ -207,6 +207,84 @@ handleTestAuth sessionId clientId isRay model =
     )
 
 
+sendTelegramMessage :
+    { text : String
+    }
+    -> Cmd BackendMsg
+sendTelegramMessage { text } =
+    let
+        url =
+            "https://api.telegram.org/bot"
+                ++ Env.telegramConfig.botToken
+                ++ "/sendMessage"
+
+        body =
+            let
+                chatId =
+                    if Env.mode == Env.Development then
+                        "8814284"
+
+                    else
+                        Env.telegramConfig.code15id
+            in
+            E.object
+                [ ( "chat_id", E.string chatId )
+                , ( "text", E.string text )
+                , ( "parse_mode", E.string "MarkdownV2" )
+                ]
+                |> Http.jsonBody
+    in
+    Http.post
+        { url = url
+        , body = body
+        , expect = Http.expectWhatever (always NoOpBackendMsg)
+        }
+
+
+{-| Send a Telegram message with a button that opens a Mini App
+-}
+sendMiniAppMessage :
+    { channelId : String
+    , text : String
+    , miniAppUrl : String
+    , buttonText : String
+    }
+    -> Cmd BackendMsg
+sendMiniAppMessage { channelId, text, miniAppUrl, buttonText } =
+    let
+        url =
+            "https://api.telegram.org/bot"
+                ++ Env.telegramConfig.botToken
+                ++ "/sendMessage"
+
+        -- Build inline keyboard with web_app button
+        replyMarkup =
+            E.object
+                [ ( "inline_keyboard"
+                  , E.list (E.list E.object)
+                        [ [ [ ( "text", E.string buttonText )
+                            , ( "web_app", E.object [ ( "url", E.string miniAppUrl ) ] )
+                            ]
+                          ]
+                        ]
+                  )
+                ]
+
+        body =
+            E.object
+                [ ( "chat_id", E.string channelId )
+                , ( "text", E.string text )
+                , ( "reply_markup", replyMarkup )
+                ]
+                |> Http.jsonBody
+    in
+    Http.post
+        { url = url
+        , body = body
+        , expect = Http.expectWhatever (always NoOpBackendMsg)
+        }
+
+
 
 -- Verify Telegram Web App initData
 
@@ -368,6 +446,7 @@ handleCreateNewRound sessionId clientId location model =
                 , Cmd.batch
                     [ Task.perform (always NoOpBackendMsg) (Task.succeed ())
                     , broadcastRoundCreated (censorRound newRound) model
+                    , sendTelegramMessage { text = "Ray heeft 'n nieuwe ronde gestart 🎉 [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)" }
                     ]
                 )
 
@@ -417,7 +496,10 @@ handleSubmitGuess sessionId clientId location model =
                                         { model | rounds = Dict.insert roundId updatedRound model.rounds }
                                 in
                                 ( newModel
-                                , broadcastGuessSubmitted guess model
+                                , [ broadcastGuessSubmitted guess model
+                                  , sendTelegramMessage { text = user.telegramUser.firstName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)" }
+                                  ]
+                                    |> Cmd.batch
                                 )
 
                         else
@@ -471,9 +553,96 @@ handleEndRound sessionId clientId model =
                                     | rounds = Dict.insert roundId closedRound model.rounds
                                     , currentRoundId = Nothing
                                 }
+
+                            -- Helper: pad a string to a fixed width (right-padded with spaces)
+                            padRight : Int -> String -> String
+                            padRight width str =
+                                let
+                                    len =
+                                        String.length str
+
+                                    padding =
+                                        if len >= width then
+                                            ""
+
+                                        else
+                                            String.repeat (width - len) " "
+                                in
+                                str ++ padding
+
+                            -- Helper: get maximum username length
+                            maxUsernameLength results =
+                                results
+                                    |> List.map (\r -> String.length r.userName)
+                                    |> List.maximum
+                                    |> Maybe.withDefault 8
+
+                            medal : Int -> String
+                            medal rank =
+                                case rank of
+                                    1 ->
+                                        "🥇"
+
+                                    2 ->
+                                        "🥈"
+
+                                    3 ->
+                                        "🥉"
+
+                                    4 ->
+                                        "🏃"
+
+                                    _ ->
+                                        ""
+
+                            -- Format a list of results into a MarkdownV2 table
+                            formatResultsTable : List { a | userName : String, rank : Int, distanceKm : Float } -> String
+                            formatResultsTable results =
+                                let
+                                    maxUserLen =
+                                        maxUsernameLength results
+
+                                    header =
+                                        padRight 4 "Rank"
+                                            ++ "  "
+                                            ++ padRight maxUserLen "User"
+                                            ++ "  Distance"
+
+                                    row r =
+                                        padRight 4 (String.fromInt r.rank)
+                                            ++ "  "
+                                            ++ padRight maxUserLen r.userName
+                                            ++ "  "
+                                            ++ String.fromInt (Basics.round r.distanceKm)
+                                            ++ " km "
+                                            ++ medal r.rank
+                                in
+                                "🏆 *Eindstand ronde* 🏁\n\n"
+                                    ++ "```\n"
+                                    ++ header
+                                    ++ "\n"
+                                    ++ (results |> List.map row |> String.join "\n")
+                                    ++ "\n```"
+
+                            sortedGuesses : List { userId : Int, userName : String, location : Location, timestamp : Time.Posix, distanceKm : Maybe Float }
+                            sortedGuesses =
+                                updatedGuesses
+                                    |> Dict.values
+                                    |> List.sortBy (.distanceKm >> Maybe.withDefault 999999)
+                                    |> Debug.log "sorted guesses"
+
+                            telegramMessage =
+                                formatResultsTable
+                                    (sortedGuesses
+                                        |> List.indexedMap (\index u -> { userName = u.userName, rank = index + 1, distanceKm = u.distanceKm })
+                                        |> List.filterMap (\{ userName, rank, distanceKm } -> distanceKm |> Maybe.map (\distance -> { userName = userName, rank = rank, distanceKm = distance }))
+                                    )
                         in
                         ( newModel
-                        , broadcastRoundClosed closedRound model
+                        , [ broadcastRoundClosed closedRound model
+                          , sendTelegramMessage { text = telegramMessage }
+                          ]
+                            |> Cmd.batch
                         )
 
                     Nothing ->
