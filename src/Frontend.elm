@@ -10,6 +10,7 @@ import Html.Events exposing (..)
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Lamdera
+import Maybe.Extra
 import Time
 import Types exposing (..)
 import Url
@@ -345,7 +346,7 @@ updateFromBackend msg model =
                                                     Just (Uncensored { rnd | guesses = Dict.insert guess.userId guess rnd.guesses })
 
                                                 Censored rnd ->
-                                                    Just (Censored { rnd | guesses = Dict.insert guess.userId { userId = guess.userId, userName = guess.userName, location = guess.location, timestamp = guess.timestamp } rnd.guesses })
+                                                    Just (Censored { rnd | guesses = Dict.insert guess.userId { userId = guess.userId, userName = guess.userName, location = Just guess.location, timestamp = guess.timestamp } rnd.guesses })
 
                                         Nothing ->
                                             Nothing
@@ -883,8 +884,13 @@ viewMap model =
                                 |> Dict.values
                                 |> List.map
                                     (\guess ->
-                                        viewMapMarker (icon guess.userId False) guess.location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                        guess.location
+                                            |> Maybe.map
+                                                (\location ->
+                                                    viewMapMarker (icon guess.userId False) location [ b [] [ text guess.userName ], p [] [ text "Guess" ] ]
+                                                )
                                     )
+                                |> Maybe.Extra.values
                            )
 
                 Nothing ->

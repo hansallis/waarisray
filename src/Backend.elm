@@ -695,20 +695,27 @@ handleRequestGameState sessionId clientId model =
 
         -- Most recent first
         gameState =
+            let
+                usersGuess =
+                    case ( currentRound, currentUser |> Maybe.map (.telegramUser >> .id) ) of
+                        ( Just rnd, Just userId ) ->
+                            Dict.get userId rnd.guesses |> Maybe.map .location
+
+                        _ ->
+                            Nothing
+            in
             { currentUser = currentUser
             , currentRound =
                 if currentUser |> Maybe.map .isRay |> Maybe.withDefault False then
                     currentRound |> Maybe.map Uncensored
 
+                else if usersGuess == Nothing then
+                    currentRound |> Maybe.map (fullyCensorRound >> Censored)
+
                 else
                     currentRound |> Maybe.map (censorRound >> Censored)
             , usersGuess =
-                case ( currentRound, currentUser |> Maybe.map (.telegramUser >> .id) ) of
-                    ( Just rnd, Just userId ) ->
-                        Dict.get userId rnd.guesses |> Maybe.map .location
-
-                    _ ->
-                        Nothing
+                usersGuess
             , pastRounds = pastRounds
             , avatarList = model.users |> Dict.values |> List.map .telegramUser |> List.filterMap (\{ id, photoUrl } -> photoUrl |> Maybe.map (\justPhotoUrl -> ( id, justPhotoUrl )))
             }
