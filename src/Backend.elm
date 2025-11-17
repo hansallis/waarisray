@@ -11,6 +11,8 @@ import Http
 import Json.Decode as Decode
 import Json.Encode as E
 import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
+import Mellie
+import Random
 import Ray
 import String.UTF8
 import Task
@@ -44,6 +46,7 @@ init =
       , userSessions = Dict.empty
       , failedAuthentications = []
       , now = Time.millisToPosix 0
+      , seed = Random.initialSeed 0
       }
     , Cmd.none
     )
@@ -60,7 +63,17 @@ update msg model =
             ( model, Cmd.none )
 
         Tick now ->
-            ( { model | now = now }, Cmd.none )
+            ( { model
+                | now = now
+                , seed =
+                    if model.seed == Random.initialSeed 0 then
+                        Random.initialSeed (Time.posixToMillis now)
+
+                    else
+                        model.seed
+              }
+            , Cmd.none
+            )
 
         GotImageGenerationResult userName result ->
             -- Handle image generation result and send to Telegram
@@ -146,8 +159,8 @@ updateFromFrontend sessionId clientId msg model =
         CreateNewRound location prompt ->
             handleCreateNewRound sessionId clientId location prompt model
 
-        SubmitUserGuess location ->
-            handleSubmitGuess sessionId clientId location model
+        SubmitUserGuess location userPrompt ->
+            handleSubmitGuess sessionId clientId location userPrompt model
 
         EndCurrentRound ->
             handleEndRound sessionId clientId model
@@ -537,8 +550,8 @@ handleCreateNewRound sessionId clientId location prompt model =
             )
 
 
-handleSubmitGuess : SessionId -> ClientId -> Location -> Model -> ( Model, Cmd BackendMsg )
-handleSubmitGuess sessionId clientId location model =
+handleSubmitGuess : SessionId -> ClientId -> Location -> String -> Model -> ( Model, Cmd BackendMsg )
+handleSubmitGuess sessionId clientId location userPrompt model =
     case getUserFromSession sessionId model of
         Just user ->
             if user.isRay then
@@ -573,7 +586,7 @@ handleSubmitGuess sessionId clientId location model =
 
                                     -- Geocode the guess location and then generate image
                                     geocodeCmd =
-                                        reverseGeocode user.telegramUser.firstName round.prompt location
+                                        reverseGeocode user.telegramUser.firstName (round.prompt ++ " " ++ String.left 20 userPrompt) location
                                 in
                                 ( if Env.mode == Env.Development then
                                     model
@@ -922,6 +935,6 @@ generateImageForTelegram : String -> String -> Cmd BackendMsg
 generateImageForTelegram userName prompt =
     GeminiImageGen.generateFromImageAndText
         Env.geminiConfig
-        Ray.base64
+        [ Ray.base64 ]
         prompt
         (GotImageGenerationResult userName)

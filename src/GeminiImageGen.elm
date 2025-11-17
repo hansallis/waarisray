@@ -55,17 +55,17 @@ No parameters like guidance scale or seed needed.
 -}
 generateFromImageAndText :
     Config
-    -> String
+    -> List String
     -> String
     -> (Result Http.Error GenerationResult -> msg)
     -> Cmd msg
-generateFromImageAndText config base64Image prompt toMsg =
+generateFromImageAndText config base64Images prompt toMsg =
     let
         url =
             buildApiUrl config
 
         body =
-            buildRequestBody base64Image prompt
+            buildRequestBody base64Images prompt
                 |> Http.jsonBody
     in
     Http.request
@@ -94,26 +94,26 @@ The Gemini API uses a simple structure with "contents" and "parts"
 No special parameters - just the prompt and image data
 
 -}
-buildRequestBody : String -> String -> Encode.Value
-buildRequestBody base64Image prompt =
+buildRequestBody : List String -> String -> Encode.Value
+buildRequestBody base64Images prompt =
     let
         -- Extract just the base64 data without the data URL prefix
-        cleanBase64 =
-            if String.startsWith "data:" base64Image then
-                base64Image
+        cleanBase64 input =
+            if String.startsWith "data:" input then
+                input
                     |> String.split ","
                     |> List.drop 1
                     |> String.join ","
 
             else
-                base64Image
+                input
 
         -- Determine MIME type from data URL or default to jpeg
-        mimeType =
-            if String.contains "image/png" base64Image then
+        mimeType input =
+            if String.contains "image/png" input then
                 "image/png"
 
-            else if String.contains "image/jpeg" base64Image || String.contains "image/jpg" base64Image then
+            else if String.contains "image/jpeg" input || String.contains "image/jpg" input then
                 "image/jpeg"
 
             else
@@ -123,14 +123,19 @@ buildRequestBody base64Image prompt =
             [ Encode.object
                 [ ( "text", Encode.string prompt )
                 ]
-            , Encode.object
-                [ ( "inline_data"
-                  , Encode.object
-                        [ ( "mime_type", Encode.string mimeType )
-                        , ( "data", Encode.string cleanBase64 )
-                        ]
-                  )
-                ]
+            , Encode.list Encode.object
+                (base64Images
+                    |> List.map
+                        (\image ->
+                            [ ( "inline_data"
+                              , Encode.object
+                                    [ ( "mime_type", Encode.string (mimeType image) )
+                                    , ( "data", Encode.string (cleanBase64 image) )
+                                    ]
+                              )
+                            ]
+                        )
+                )
             ]
 
         contents =

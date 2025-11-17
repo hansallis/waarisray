@@ -240,9 +240,9 @@ update msg model =
             case ( model.currentUser, model.userGuess ) of
                 ( Just user, Just guess ) ->
                     if not user.isRay then
-                        ( { model | userGuess = Nothing }
-                          -- Clear local guess, will be set from broadcast
-                        , Lamdera.sendToBackend (SubmitUserGuess guess)
+                        ( { model | userGuess = Nothing, prompt = "" }
+                          -- Clear local guess and prompt, will be set from broadcast
+                        , Lamdera.sendToBackend (SubmitUserGuess guess model.prompt)
                         )
 
                     else
@@ -786,6 +786,18 @@ viewPlayerControls model =
                                         [ h3 []
                                             [ text "Confirm your guess" ]
                                         , br [] []
+                                        , div [ class "user-prompt-section" ]
+                                            [ label [] [ text "Extra prompt (optional, max 20 chars):" ]
+                                            , input
+                                                [ type_ "text"
+                                                , maxlength 20
+                                                , placeholder "e.g., holding a fish"
+                                                , value model.prompt
+                                                , onInput PromptChanged
+                                                , class "user-prompt-input"
+                                                ]
+                                                []
+                                            ]
                                         , button [ onClick SubmitGuess ] [ text "Confirm guess" ]
                                         ]
 
@@ -829,6 +841,18 @@ viewPlayerControls model =
                                         [ h3 []
                                             [ text "Confirm your guess" ]
                                         , br [] []
+                                        , div [ class "user-prompt-section" ]
+                                            [ label [] [ text "Extra prompt (optional, max 20 chars):" ]
+                                            , input
+                                                [ type_ "text"
+                                                , maxlength 20
+                                                , placeholder "e.g., holding a fish"
+                                                , value model.prompt
+                                                , onInput PromptChanged
+                                                , class "user-prompt-input"
+                                                ]
+                                                []
+                                            ]
                                         , button [ onClick SubmitGuess ] [ text "Confirm guess" ]
                                         ]
 
@@ -1427,6 +1451,35 @@ viewStyles =
             
             .cancel-btn:hover {
                 background: #c0392b;
+            }
+            
+            .user-prompt-section {
+                margin: 1rem 0;
+                padding: 1rem;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }
+            
+            .user-prompt-section label {
+                display: block;
+                margin-bottom: 0.5rem;
+                font-weight: bold;
+                color: #2c3e50;
+            }
+            
+            .user-prompt-input {
+                width: 100%;
+                padding: 0.5rem;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+                font-family: inherit;
+                font-size: 1rem;
+                transition: border-color 0.2s;
+            }
+            
+            .user-prompt-input:focus {
+                outline: none;
+                border-color: #3498db;
             }
             
                          h2, h3, h4 { margin-bottom: 1rem; }

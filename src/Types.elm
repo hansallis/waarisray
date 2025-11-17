@@ -7,6 +7,7 @@ import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Lamdera exposing (ClientId, SessionId)
+import Random
 import Time
 import Url exposing (Url)
 
@@ -153,6 +154,7 @@ type alias BackendModel =
     , userSessions : Dict SessionId Int -- sessionId -> userId
     , failedAuthentications : List String
     , now : Time.Posix
+    , seed : Random.Seed
     }
 
 
@@ -211,7 +213,7 @@ type ToBackend
     | AuthenticateAsRegularUser
     | -- Game actions
       CreateNewRound Location String -- Ray sets location and image prompt
-    | SubmitUserGuess Location
+    | SubmitUserGuess Location String
     | EndCurrentRound
     | RequestCurrentGameState
     | RequestRoundHistory
