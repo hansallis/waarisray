@@ -54,11 +54,11 @@ type alias CensoredGuess =
 
 
 type alias CensoredRound =
-    Round () CensoredGuess
+    Round () () CensoredGuess
 
 
 type alias UncensoredRound =
-    Round Location Guess
+    Round String Location Guess
 
 
 type FrontendRound
@@ -79,6 +79,7 @@ toCensoredRound round =
 censorRound : UncensoredRound -> CensoredRound
 censorRound { actualLocation, startTime, endTime, guesses, isOpen } =
     { actualLocation = ()
+    , prompt = ()
     , startTime = startTime
     , endTime = endTime
     , guesses = Dict.map (always (\{ userId, userName, location, timestamp } -> { userId = userId, userName = userName, location = Just location, timestamp = timestamp })) guesses
@@ -91,8 +92,9 @@ fullyCensorRound =
     censorRound >> (\round -> { round | guesses = Dict.map (always (\guess -> { guess | location = Nothing })) round.guesses })
 
 
-type alias Round actualLocationType guessType =
+type alias Round promptType actualLocationType guessType =
     { actualLocation : actualLocationType
+    , prompt : promptType
     , startTime : Time.Posix
     , endTime : Maybe Time.Posix
     , guesses : Dict Int guessType -- userId -> Guess
@@ -132,6 +134,7 @@ type alias FrontendModel =
     , pastRounds : List UncensoredRound
     , userGuess : Maybe Location
     , pendingLocation : Maybe Location -- Ray's pending location before confirming
+    , prompt : String
     , mapCenter : Location
     , mapZoom : Int
     , avatarList : List ( Int, String )
@@ -178,6 +181,7 @@ type FrontendMsg
     | ViewRound Int
     | GoToHistory
     | GoToGame
+    | PromptChanged String
     | -- UI
       ClearError
     | NoOpFrontendMsg
@@ -205,7 +209,7 @@ type ToBackend
       AuthenticateAsRay
     | AuthenticateAsRegularUser
     | -- Game actions
-      CreateNewRound Location -- Ray sets location
+      CreateNewRound Location String -- Ray sets location and image prompt
     | SubmitUserGuess Location
     | EndCurrentRound
     | RequestCurrentGameState

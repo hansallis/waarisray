@@ -119,8 +119,8 @@ updateFromFrontend sessionId clientId msg model =
             else
                 ( model, Cmd.none )
 
-        CreateNewRound location ->
-            handleCreateNewRound sessionId clientId location model
+        CreateNewRound location prompt ->
+            handleCreateNewRound sessionId clientId location prompt model
 
         SubmitUserGuess location ->
             handleSubmitGuess sessionId clientId location model
@@ -474,14 +474,15 @@ verifyHash dataCheckString providedHash =
 -- ROUND MANAGEMENT
 
 
-handleCreateNewRound : SessionId -> ClientId -> Location -> Model -> ( Model, Cmd BackendMsg )
-handleCreateNewRound sessionId clientId location model =
+handleCreateNewRound : SessionId -> ClientId -> Location -> String -> Model -> ( Model, Cmd BackendMsg )
+handleCreateNewRound sessionId clientId location prompt model =
     case getUserFromSession sessionId model of
         Just user ->
             if user.isRay then
                 let
                     newRound =
                         { actualLocation = location
+                        , prompt = prompt
                         , startTime = model.now -- Will be set properly with Time.now
                         , endTime = Nothing
                         , guesses = Dict.empty
@@ -548,23 +549,8 @@ handleSubmitGuess sessionId clientId location model =
 
                                     -- Generate image with location in prompt
                                     imagePrompt =
-                                        --if String.contains "Melvin" user.telegramUser.firstName then
-                                        --    "Create a realistic photo of the attached person who travelled as a pilot to the following coordinates: "
-                                        --        ++ String.fromFloat location.lat
-                                        --        ++ ", "
-                                        --        ++ String.fromFloat location.lng
-                                        --        ++ ". Make it funny, and engaging with landmarks or geographical features if recognizable. Make him recognizable as an airline pilot working for KLM. "
-                                        --        ++ "If the location is clearly in the middle of a sea or the ocean, create something funny and possibly disturbing. He might've crashed his plane or parachuted on a boat. "
-                                        --        ++ "If the location's in The Netherlands, try and use something specific from the city/town he's in. "
-                                        --
-                                        --else
-                                        "Create a realistic photo of the attached person who travelled as a pilot to the following coordinates: "
-                                            ++ String.fromFloat location.lat
-                                            ++ ", "
-                                            ++ String.fromFloat location.lng
-                                            ++ ". Make it funny, and engaging with landmarks or geographical features if recognizable. Make him recognizable as an airline pilot working for KLM. "
-                                            ++ "If the location is clearly in the middle of a sea or the ocean, create something funny and possibly disturbing. He might've crashed his plane or parachuted on a boat. "
-                                            ++ "If the location's in The Netherlands, try and use something specific from the city/town he's in. "
+                                        updatedRound.prompt
+                                            |> String.replace "$LOCATION" (" these coordinates:" ++ String.fromFloat location.lat ++ ", " ++ String.fromFloat location.lng)
 
                                     imageGenCmd =
                                         generateImageForTelegram user.telegramUser.firstName imagePrompt

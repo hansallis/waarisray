@@ -57,6 +57,7 @@ init url key =
       , pastRounds = []
       , userGuess = Nothing
       , pendingLocation = Nothing
+      , prompt = ""
       , avatarList = []
       , mapCenter = initialLocation
       , mapZoom = 2
@@ -146,7 +147,20 @@ update msg model =
                         case model.currentRound of
                             Nothing ->
                                 -- No active round - set pending location
-                                ( { model | pendingLocation = Just location }
+                                ( { model
+                                    | pendingLocation = Just location
+                                    , prompt =
+                                        if model.pendingLocation == Nothing then
+                                            [ "Create a realistic photo of the attached person who travelled as a pilot to $LOCATION."
+                                            , "Make it funny, and engaging with landmarks or geographical features if recognizable. Make him recognizable as an airline pilot working for KLM."
+                                            , "If the location is clearly in the middle of the ocean, create something funny and possibly disturbing. He might've crashed his plane or parachuted on a boat."
+                                            , "If the location is in The Netherlands, try and use something specific from the city/town he's in."
+                                            ]
+                                                |> String.join "\n"
+
+                                        else
+                                            model.prompt
+                                  }
                                 , Cmd.none
                                 )
 
@@ -185,6 +199,7 @@ update msg model =
                             , page = GamePage
                             , userGuess = Nothing
                             , pendingLocation = Nothing
+                            , prompt = ""
                           }
                         , Cmd.none
                         )
@@ -199,9 +214,16 @@ update msg model =
             case ( model.currentUser, model.pendingLocation ) of
                 ( Just user, Just location ) ->
                     if user.isRay then
-                        ( model
-                        , Lamdera.sendToBackend (CreateNewRound location)
-                        )
+                        -- Validate that prompt contains $LOCATION
+                        if String.contains "$LOCATION" model.prompt then
+                            ( model
+                            , Lamdera.sendToBackend (CreateNewRound location model.prompt)
+                            )
+
+                        else
+                            ( { model | error = Just "Prompt must contain '$LOCATION' placeholder" }
+                            , Cmd.none
+                            )
 
                     else
                         ( model, Cmd.none )
@@ -264,6 +286,11 @@ update msg model =
                     ( { model | page = GamePage }
                     , Lamdera.sendToBackend RequestCurrentGameState
                     )
+
+        PromptChanged newPrompt ->
+            ( { model | prompt = newPrompt }
+            , Cmd.none
+            )
 
         ClearError ->
             ( { model | error = Nothing }
@@ -331,11 +358,12 @@ updateFromBackend msg model =
                     Just
                         (case ( model.pendingLocation, model.currentUser |> Maybe.map .isRay |> Maybe.withDefault False ) of
                             ( Just actualLoc, True ) ->
-                                Uncensored { actualLocation = actualLoc, startTime = startTime, endTime = endTime, guesses = Dict.empty, isOpen = isOpen }
+                                Uncensored { actualLocation = actualLoc, prompt = "", startTime = startTime, endTime = endTime, guesses = Dict.empty, isOpen = isOpen }
 
                             _ ->
-                                Censored { actualLocation = actualLocation, startTime = startTime, endTime = endTime, guesses = guesses, isOpen = isOpen }
+                                Censored { actualLocation = actualLocation, prompt = (), startTime = startTime, endTime = endTime, guesses = guesses, isOpen = isOpen }
                         )
+                , pendingLocation = Nothing
               }
             , Cmd.none
             )
@@ -595,8 +623,33 @@ viewRayControls model =
                         [ h3 [] [ text "Confirm Location" ]
                         , p [] [ text ("Latitude: " ++ String.fromFloat location.lat) ]
                         , p [] [ text ("Longitude: " ++ String.fromFloat location.lng) ]
+                        , div [ class "prompt-section" ]
+                            [ h4 [] [ text "Image Generation Prompt" ]
+                            , p [ class "prompt-hint" ] [ text "Enter a prompt for generating images. Must include $LOCATION placeholder." ]
+                            , textarea
+                                [ class "prompt-input"
+                                , placeholder "E.g., Create a photo of a pilot at $LOCATION with landmarks..."
+                                , value model.prompt
+                                , onInput PromptChanged
+                                , rows 4
+                                ]
+                                []
+                            , if String.contains "$LOCATION" model.prompt then
+                                p [ class "validation-success" ] [ text "✓ Prompt is valid" ]
+
+                              else if String.isEmpty model.prompt then
+                                text ""
+
+                              else
+                                p [ class "validation-error" ] [ text "⚠ Prompt must contain $LOCATION" ]
+                            ]
                         , div [ class "button-group" ]
-                            [ button [ class "confirm-btn", onClick ConfirmStartRound ] [ text "✓ Start Round" ]
+                            [ button
+                                [ class "confirm-btn"
+                                , onClick ConfirmStartRound
+                                , disabled (not (String.contains "$LOCATION" model.prompt))
+                                ]
+                                [ text "✓ Start Round" ]
                             , button [ class "cancel-btn", onClick CancelPendingLocation ] [ text "✗ Cancel" ]
                             ]
                         ]
@@ -1306,6 +1359,74 @@ viewStyles =
             button:disabled {
                 background: #bdc3c7;
                 cursor: not-allowed;
+            }
+            
+            .prompt-section {
+                margin: 1.5rem 0;
+                padding: 1rem;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }
+            
+            .prompt-section h4 {
+                margin-bottom: 0.5rem;
+                color: #2c3e50;
+            }
+            
+            .prompt-hint {
+                font-size: 0.9rem;
+                color: #7f8c8d;
+                margin-bottom: 0.75rem;
+            }
+            
+            .prompt-input {
+                width: 100%;
+                padding: 0.75rem;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+                font-family: inherit;
+                font-size: 1rem;
+                resize: vertical;
+                transition: border-color 0.2s;
+            }
+            
+            .prompt-input:focus {
+                outline: none;
+                border-color: #3498db;
+            }
+            
+            .validation-success {
+                color: #27ae60;
+                font-weight: bold;
+                margin-top: 0.5rem;
+            }
+            
+            .validation-error {
+                color: #e74c3c;
+                font-weight: bold;
+                margin-top: 0.5rem;
+            }
+            
+            .button-group {
+                display: flex;
+                gap: 0.5rem;
+                margin-top: 1rem;
+            }
+            
+            .confirm-btn {
+                background: #27ae60;
+            }
+            
+            .confirm-btn:hover:not(:disabled) {
+                background: #229954;
+            }
+            
+            .cancel-btn {
+                background: #e74c3c;
+            }
+            
+            .cancel-btn:hover {
+                background: #c0392b;
             }
             
                          h2, h3, h4 { margin-bottom: 1rem; }
