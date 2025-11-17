@@ -195,6 +195,7 @@ type BackendMsg
     = NoOpBackendMsg
     | Tick Time.Posix
     | GotImageGenerationResult String (Result Http.Error { images : List String, error : Maybe String }) -- userName, result
+    | GotGeocodeResult String String (Result Http.Error String) -- userName, prompt template, result (location name)
 
 
 

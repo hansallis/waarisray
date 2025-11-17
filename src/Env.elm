@@ -76,3 +76,19 @@ geminiConfig :
 geminiConfig =
     { apiKey = geminiApiKey
     }
+
+
+
+-- Google Maps API configuration
+
+
+googleMapsApiKey =
+    ""
+
+
+googleMapsConfig :
+    { apiKey : String
+    }
+googleMapsConfig =
+    { apiKey = googleMapsApiKey
+    }

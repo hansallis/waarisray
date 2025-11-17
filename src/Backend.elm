@@ -95,6 +95,30 @@ update msg model =
                         }
                     )
 
+        GotGeocodeResult userName promptTemplate result ->
+            case result of
+                Ok locationName ->
+                    let
+                        -- Replace $LOCATION with the actual location name
+                        finalPrompt =
+                            String.replace "$LOCATION" locationName promptTemplate
+
+                        _ =
+                            Debug.log "✅ Geocoding successful for guess" { userName = userName, locationName = locationName }
+                    in
+                    -- Generate image with the geocoded location
+                    ( model, generateImageForTelegram userName finalPrompt )
+
+                Err httpError ->
+                    let
+                        _ =
+                            Debug.log "❌ Geocoding failed for guess" httpError
+
+                        -- Fallback: generate image with the prompt template as-is
+                        -- (it will still have $LOCATION but that's okay as fallback)
+                    in
+                    ( model, generateImageForTelegram userName promptTemplate )
+
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
@@ -547,17 +571,13 @@ handleSubmitGuess sessionId clientId location model =
                                     newModel =
                                         { model | rounds = updatedRound :: oldRounds }
 
-                                    -- Generate image with location in prompt
-                                    imagePrompt =
-                                        updatedRound.prompt
-                                            |> String.replace "$LOCATION" (" these coordinates:" ++ String.fromFloat location.lat ++ ", " ++ String.fromFloat location.lng)
-
-                                    imageGenCmd =
-                                        generateImageForTelegram user.telegramUser.firstName imagePrompt
+                                    -- Geocode the guess location and then generate image
+                                    geocodeCmd =
+                                        reverseGeocode user.telegramUser.firstName round.prompt location
                                 in
                                 ( newModel
                                 , [ broadcastGuessSubmitted guess model
-                                  , imageGenCmd
+                                  , geocodeCmd
                                   ]
                                     |> Cmd.batch
                                 )
@@ -815,6 +835,65 @@ broadcastGuessSubmitted guess model =
 broadcastRoundClosed : UncensoredRound -> Model -> Cmd BackendMsg
 broadcastRoundClosed round model =
     Lamdera.broadcast <| RoundClosed round
+
+
+
+-- GEOCODING
+
+
+{-| Reverse geocode coordinates to a location name using Google Maps Geocoding API
+-}
+reverseGeocode : String -> String -> Location -> Cmd BackendMsg
+reverseGeocode userName promptTemplate location =
+    let
+        url =
+            "https://maps.googleapis.com/maps/api/geocode/json?latlng="
+                ++ String.fromFloat location.lat
+                ++ ","
+                ++ String.fromFloat location.lng
+                ++ "&key="
+                ++ Env.googleMapsConfig.apiKey
+
+        _ =
+            Debug.log "🌍 Geocoding request for guess" { userName = userName, lat = location.lat, lng = location.lng }
+    in
+    Http.get
+        { url = url
+        , expect = Http.expectJson (GotGeocodeResult userName promptTemplate) geocodeDecoder
+        }
+
+
+{-| Decode the geocoding response to extract the formatted address
+-}
+geocodeDecoder : Decode.Decoder String
+geocodeDecoder =
+    Decode.field "results" (Decode.index 0 (Decode.field "formatted_address" Decode.string))
+        |> Decode.andThen
+            (\address ->
+                Decode.succeed (cleanLocationName address)
+            )
+
+
+{-| Clean up the location name to be more readable
+Remove unnecessary country codes and format nicely
+-}
+cleanLocationName : String -> String
+cleanLocationName fullAddress =
+    -- Try to extract just the main location parts (city, region)
+    -- This removes full postal addresses and keeps it concise
+    case String.split "," fullAddress of
+        [] ->
+            fullAddress
+
+        [ single ] ->
+            String.trim single
+
+        parts ->
+            -- Take the first 2-3 parts (usually city, state/region, country)
+            parts
+                |> List.take 3
+                |> List.map String.trim
+                |> String.join ", "
 
 
 
