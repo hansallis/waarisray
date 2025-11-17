@@ -555,7 +555,7 @@ handleSubmitGuess sessionId clientId location model =
                                     imageGenCmd =
                                         generateImageForTelegram user.telegramUser.firstName imagePrompt
                                 in
-                                ( model
+                                ( newModel
                                 , [ broadcastGuessSubmitted guess model
                                   , imageGenCmd
                                   ]
