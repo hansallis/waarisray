@@ -60,3 +60,19 @@ telegramConfig =
 
     -- Replace with your actual Lamdera URL
     }
+
+
+
+-- Gemini API configuration
+
+
+geminiApiKey =
+    "your-gemini-api-key"
+
+
+geminiConfig :
+    { apiKey : String
+    }
+geminiConfig =
+    { apiKey = geminiApiKey
+    }
