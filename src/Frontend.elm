@@ -151,10 +151,8 @@ update msg model =
                                     | pendingLocation = Just location
                                     , prompt =
                                         if model.pendingLocation == Nothing then
-                                            [ "Create a realistic photo of the attached person who travelled as a pilot to $LOCATION."
-                                            , "Make it funny, and engaging with landmarks or geographical features if recognizable. Make him recognizable as an airline pilot working for KLM."
-                                            , "If the location is clearly in the middle of the ocean, create something funny and possibly disturbing. He might've crashed his plane or parachuted on a boat."
-                                            , "If the location is in The Netherlands, try and use something specific from the city/town he's in."
+                                            [ "Create a realistic photo of the attached person traveling in $LOCATION."
+                                            , "Make it funny, and engaging with landmarks or geographical features if available. Make him recognizable as an airline pilot working for KLM."
                                             ]
                                                 |> String.join "\n"
 
@@ -179,7 +177,15 @@ update msg model =
 
                                 else
                                     -- Can still adjust guess before submitting
-                                    ( { model | userGuess = Just location }
+                                    ( { model
+                                        | userGuess = Just location
+                                        , prompt =
+                                            if model.userGuess == Nothing then
+                                                ""
+
+                                            else
+                                                model.prompt
+                                      }
                                     , Cmd.none
                                     )
 
