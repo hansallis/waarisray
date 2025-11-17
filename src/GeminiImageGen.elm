@@ -150,37 +150,6 @@ buildRequestBody base64Image prompt =
 
 
 {-| Decode the Gemini API response
-
-Response format:
-{
-"candidates": [{
-"content": {
-"parts": [{
-"inline\_data": {
-"mime\_type": "image/png",
-"data": "base64..."
-}
-}][{
-"inline_data": {
-"mime_type": "image/png",
-"data": "base64..."
-}
-}],
-"role": "model"
-}
-}][{
-"content": {
-"parts": [{
-"inline_data": {
-"mime_type": "image/png",
-"data": "base64..."
-}
-}],
-"role": "model"
-}
-}]
-}
-
 -}
 responseDecoder : Decode.Decoder GenerationResult
 responseDecoder =

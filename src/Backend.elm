@@ -1,6 +1,8 @@
 module Backend exposing (..)
 
-import Base64.Encode
+import Base64
+import Bytes exposing (Bytes)
+import Bytes.Encode
 import Crypto.HMAC exposing (digest, digestBytes, sha256)
 import Dict
 import Env
@@ -276,20 +278,10 @@ sendTelegramMessage { text } =
         }
 
 
-{-| Send a photo to Telegram with caption
+{-| Send a photo to Telegram with caption using multipart form-data
 
-Note: Telegram's Bot API requires the photo to be sent as a URL or file.
-Since we have a base64 image from Gemini, we need to use a data URL approach.
-For production, you might want to upload to a CDN first and send the URL instead.
-
-For now, we'll use the simpler approach of sending the base64 as-is and let
-Telegram handle it (this works with the photo field accepting base64 data URLs).
-
-If this doesn't work, an alternative is to:
-
-1.  Upload the image to a temporary storage/CDN
-2.  Send the URL to Telegram
-3.  Clean up after
+Telegram requires photos to be sent as multipart/form-data, not JSON.
+We convert the base64 image to binary bytes and upload it directly.
 
 -}
 sendTelegramPhoto :
@@ -311,25 +303,50 @@ sendTelegramPhoto { caption, imageBase64 } =
                 ++ Env.telegramConfig.botToken
                 ++ "/sendPhoto"
 
-        -- For Telegram, we can send the image as a data URL directly
-        -- The imageBase64 from Gemini already includes the data:image/png;base64, prefix
-        body =
-            E.object
-                [ ( "chat_id", E.string chatId )
-                , ( "photo", E.string imageBase64 )
-                , ( "caption", E.string caption )
-                , ( "parse_mode", E.string "MarkdownV2" )
-                ]
-                |> Http.jsonBody
+        -- Extract base64 data (remove data URL prefix if present)
+        cleanBase64 =
+            if String.startsWith "data:" imageBase64 then
+                imageBase64
+                    |> String.split ","
+                    |> List.drop 1
+                    |> String.join ","
+
+            else
+                imageBase64
 
         _ =
-            Debug.log "📸 Sending photo to Telegram" { chatId = chatId, captionLength = String.length caption, imageLength = String.length imageBase64 }
+            Debug.log "📸 Sending photo to Telegram" { chatId = chatId, caption = caption, base64Length = String.length cleanBase64 }
     in
-    Http.post
-        { url = url
-        , body = body
-        , expect = Http.expectWhatever (always NoOpBackendMsg)
-        }
+    case base64ToBytes cleanBase64 of
+        Just imageBytes ->
+            Http.post
+                { url = url
+                , body =
+                    Http.multipartBody
+                        [ Http.stringPart "chat_id" chatId
+                        , Http.stringPart "caption" caption
+                        , Http.stringPart "parse_mode" "MarkdownV2"
+                        , Http.bytesPart "photo" "image/png" imageBytes
+                        ]
+                , expect = Http.expectWhatever (always NoOpBackendMsg)
+                }
+
+        Nothing ->
+            let
+                _ =
+                    Debug.log "❌ Failed to decode base64 image" ()
+            in
+            -- Fallback to text message
+            sendTelegramMessage
+                { text = caption ++ ": [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)"
+                }
+
+
+{-| Convert a base64 string to Bytes
+-}
+base64ToBytes : String -> Maybe Bytes
+base64ToBytes base64String =
+    Base64.toBytes base64String
 
 
 
