@@ -847,7 +847,7 @@ reverseGeocode : String -> String -> Location -> Cmd BackendMsg
 reverseGeocode userName promptTemplate location =
     let
         url =
-            "https://maps.googleapis.com/maps/api/geocode/json?language=en&result_type=locality&latlng="
+            "https://maps.googleapis.com/maps/api/geocode/json?language=en&latlng="
                 ++ String.fromFloat location.lat
                 ++ ","
                 ++ String.fromFloat location.lng
