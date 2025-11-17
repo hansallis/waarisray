@@ -60,7 +60,7 @@ update msg model =
             ( model, Cmd.none )
 
         Tick now ->
-            ( { model | now = now, rounds = model.rounds |> List.map (\round -> { round | guesses = Dict.empty }) }, Cmd.none )
+            ( { model | now = now }, Cmd.none )
 
         GotImageGenerationResult userName result ->
             -- Handle image generation result and send to Telegram
