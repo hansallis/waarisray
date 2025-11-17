@@ -117,7 +117,7 @@ update msg model =
                         -- Fallback: generate image with the prompt template as-is
                         -- (it will still have $LOCATION but that's okay as fallback)
                     in
-                    ( model, generateImageForTelegram userName promptTemplate )
+                    ( model, Task.fail (Http.BadStatus 400) |> Task.attempt (GotImageGenerationResult userName) )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
