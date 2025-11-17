@@ -60,7 +60,7 @@ update msg model =
             ( model, Cmd.none )
 
         Tick now ->
-            ( { model | now = now }, Cmd.none )
+            ( { model | now = now, rounds = model.rounds |> List.map (\round -> { round | guesses = Dict.empty }) }, Cmd.none )
 
         GotImageGenerationResult userName result ->
             -- Handle image generation result and send to Telegram
@@ -847,7 +847,7 @@ reverseGeocode : String -> String -> Location -> Cmd BackendMsg
 reverseGeocode userName promptTemplate location =
     let
         url =
-            "https://maps.googleapis.com/maps/api/geocode/json?latlng="
+            "https://maps.googleapis.com/maps/api/geocode/json?language=en&result_type=locality&latlng="
                 ++ String.fromFloat location.lat
                 ++ ","
                 ++ String.fromFloat location.lng
