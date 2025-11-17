@@ -862,37 +862,34 @@ broadcastRoundClosed round model =
 -- GEOCODING
 
 
-{-| Reverse geocode coordinates to a location name using OpenStreetMap Nominatim API
+{-| Reverse geocode coordinates to a location name using OpenCage Geocoder API
 -}
 reverseGeocode : String -> String -> Location -> Cmd BackendMsg
 reverseGeocode userName promptTemplate location =
     let
         url =
-            "https://nominatim.openstreetmap.org/reverse?format=json&lat="
+            "https://api.opencagedata.com/geocode/v1/json?q="
                 ++ String.fromFloat location.lat
-                ++ "&lon="
+                ++ "+"
                 ++ String.fromFloat location.lng
-                ++ "&accept-language=en"
+                ++ "&key="
+                ++ Env.openCageConfig.apiKey
+                ++ "&language=en"
 
         _ =
             Debug.log "🌍 Geocoding request for guess" { userName = userName, lat = location.lat, lng = location.lng }
     in
-    Http.request
-        { method = "GET"
-        , headers = [ Http.header "User-Agent" "WaarisRay/1.0" ]
-        , url = url
-        , body = Http.emptyBody
+    Http.get
+        { url = url
         , expect = Http.expectJson (GotGeocodeResult userName promptTemplate) geocodeDecoder
-        , timeout = Nothing
-        , tracker = Nothing
         }
 
 
-{-| Decode the Nominatim geocoding response to extract the formatted address
+{-| Decode the OpenCage geocoding response to extract the formatted address
 -}
 geocodeDecoder : Decode.Decoder String
 geocodeDecoder =
-    Decode.field "display_name" Decode.string
+    Decode.field "results" (Decode.index 0 (Decode.field "formatted" Decode.string))
         |> Decode.andThen
             (\address ->
                 Decode.succeed (cleanLocationName address)

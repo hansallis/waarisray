@@ -92,3 +92,19 @@ googleMapsConfig :
 googleMapsConfig =
     { apiKey = googleMapsApiKey
     }
+
+
+
+-- OpenCage Geocoder API configuration
+
+
+openCageApiKey =
+    "YOUR_OPENCAGE_API_KEY_HERE"
+
+
+openCageConfig :
+    { apiKey : String
+    }
+openCageConfig =
+    { apiKey = openCageApiKey
+    }
