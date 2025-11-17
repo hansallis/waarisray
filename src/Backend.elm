@@ -120,7 +120,11 @@ update msg model =
                             Debug.log "✅ Geocoding successful for guess" { userName = userName, locationName = locationName }
                     in
                     -- Generate image with the geocoded location
-                    ( model, generateImageForTelegram userName finalPrompt )
+                    if Env.mode == Env.Development then
+                        ( model, Task.fail (Http.BadStatus 400) |> Task.attempt (GotImageGenerationResult userName) )
+
+                    else
+                        ( model, generateImageForTelegram userName finalPrompt )
 
                 Err httpError ->
                     let
@@ -858,33 +862,37 @@ broadcastRoundClosed round model =
 -- GEOCODING
 
 
-{-| Reverse geocode coordinates to a location name using Google Maps Geocoding API
+{-| Reverse geocode coordinates to a location name using OpenStreetMap Nominatim API
 -}
 reverseGeocode : String -> String -> Location -> Cmd BackendMsg
 reverseGeocode userName promptTemplate location =
     let
         url =
-            "https://maps.googleapis.com/maps/api/geocode/json?language=en&latlng="
+            "https://nominatim.openstreetmap.org/reverse?format=json&lat="
                 ++ String.fromFloat location.lat
-                ++ ","
+                ++ "&lon="
                 ++ String.fromFloat location.lng
-                ++ "&key="
-                ++ Env.googleMapsConfig.apiKey
+                ++ "&accept-language=en"
 
         _ =
             Debug.log "🌍 Geocoding request for guess" { userName = userName, lat = location.lat, lng = location.lng }
     in
-    Http.get
-        { url = url
+    Http.request
+        { method = "GET"
+        , headers = [ Http.header "User-Agent" "WaarisRay/1.0" ]
+        , url = url
+        , body = Http.emptyBody
         , expect = Http.expectJson (GotGeocodeResult userName promptTemplate) geocodeDecoder
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
-{-| Decode the geocoding response to extract the formatted address
+{-| Decode the Nominatim geocoding response to extract the formatted address
 -}
 geocodeDecoder : Decode.Decoder String
 geocodeDecoder =
-    Decode.field "results" (Decode.index 0 (Decode.field "formatted_address" Decode.string))
+    Decode.field "display_name" Decode.string
         |> Decode.andThen
             (\address ->
                 Decode.succeed (cleanLocationName address)
