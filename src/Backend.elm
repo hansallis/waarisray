@@ -4,10 +4,12 @@ import Base64.Encode
 import Crypto.HMAC exposing (digest, digestBytes, sha256)
 import Dict
 import Env
+import GeminiImageGen
 import Http
 import Json.Decode as Decode
 import Json.Encode as E
 import Lamdera exposing (ClientId, SessionId, onConnect, onDisconnect, sendToFrontend)
+import Ray
 import String.UTF8
 import Task
 import Time
@@ -57,6 +59,39 @@ update msg model =
 
         Tick now ->
             ( { model | now = now }, Cmd.none )
+
+        GotImageGenerationResult userName result ->
+            -- Handle image generation result and send to Telegram
+            case result of
+                Ok generationResult ->
+                    let
+                        -- Get the first generated image
+                        cmd =
+                            case List.head generationResult.images of
+                                Just imageBase64 ->
+                                    sendTelegramPhoto
+                                        { caption = userName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)"
+                                        , imageBase64 = imageBase64
+                                        }
+
+                                Nothing ->
+                                    -- Fallback to text message if no image
+                                    sendTelegramMessage
+                                        { text = userName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)"
+                                        }
+                    in
+                    ( model, cmd )
+
+                Err httpError ->
+                    let
+                        _ =
+                            Debug.log "❌ Image generation failed" httpError
+                    in
+                    ( model
+                    , sendTelegramMessage
+                        { text = userName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)"
+                        }
+                    )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
@@ -241,42 +276,54 @@ sendTelegramMessage { text } =
         }
 
 
-{-| Send a Telegram message with a button that opens a Mini App
+{-| Send a photo to Telegram with caption
+
+Note: Telegram's Bot API requires the photo to be sent as a URL or file.
+Since we have a base64 image from Gemini, we need to use a data URL approach.
+For production, you might want to upload to a CDN first and send the URL instead.
+
+For now, we'll use the simpler approach of sending the base64 as-is and let
+Telegram handle it (this works with the photo field accepting base64 data URLs).
+
+If this doesn't work, an alternative is to:
+
+1.  Upload the image to a temporary storage/CDN
+2.  Send the URL to Telegram
+3.  Clean up after
+
 -}
-sendMiniAppMessage :
-    { channelId : String
-    , text : String
-    , miniAppUrl : String
-    , buttonText : String
+sendTelegramPhoto :
+    { caption : String
+    , imageBase64 : String
     }
     -> Cmd BackendMsg
-sendMiniAppMessage { channelId, text, miniAppUrl, buttonText } =
+sendTelegramPhoto { caption, imageBase64 } =
     let
+        chatId =
+            if Env.mode == Env.Development then
+                "8814284"
+
+            else
+                Env.telegramConfig.code15id
+
         url =
             "https://api.telegram.org/bot"
                 ++ Env.telegramConfig.botToken
-                ++ "/sendMessage"
+                ++ "/sendPhoto"
 
-        -- Build inline keyboard with web_app button
-        replyMarkup =
-            E.object
-                [ ( "inline_keyboard"
-                  , E.list (E.list E.object)
-                        [ [ [ ( "text", E.string buttonText )
-                            , ( "web_app", E.object [ ( "url", E.string miniAppUrl ) ] )
-                            ]
-                          ]
-                        ]
-                  )
-                ]
-
+        -- For Telegram, we can send the image as a data URL directly
+        -- The imageBase64 from Gemini already includes the data:image/png;base64, prefix
         body =
             E.object
-                [ ( "chat_id", E.string channelId )
-                , ( "text", E.string text )
-                , ( "reply_markup", replyMarkup )
+                [ ( "chat_id", E.string chatId )
+                , ( "photo", E.string imageBase64 )
+                , ( "caption", E.string caption )
+                , ( "parse_mode", E.string "MarkdownV2" )
                 ]
                 |> Http.jsonBody
+
+        _ =
+            Debug.log "📸 Sending photo to Telegram" { chatId = chatId, captionLength = String.length caption, imageLength = String.length imageBase64 }
     in
     Http.post
         { url = url
@@ -481,10 +528,33 @@ handleSubmitGuess sessionId clientId location model =
 
                                     newModel =
                                         { model | rounds = updatedRound :: oldRounds }
+
+                                    -- Generate image with location in prompt
+                                    imagePrompt =
+                                        --if String.contains "Melvin" user.telegramUser.firstName then
+                                        --    "Create a realistic photo of the attached person who travelled as a pilot to the following coordinates: "
+                                        --        ++ String.fromFloat location.lat
+                                        --        ++ ", "
+                                        --        ++ String.fromFloat location.lng
+                                        --        ++ ". Make it funny, and engaging with landmarks or geographical features if recognizable. Make him recognizable as an airline pilot working for KLM. "
+                                        --        ++ "If the location is clearly in the middle of a sea or the ocean, create something funny and possibly disturbing. He might've crashed his plane or parachuted on a boat. "
+                                        --        ++ "If the location's in The Netherlands, try and use something specific from the city/town he's in. "
+                                        --
+                                        --else
+                                        "Create a realistic photo of the attached person who travelled as a pilot to the following coordinates: "
+                                            ++ String.fromFloat location.lat
+                                            ++ ", "
+                                            ++ String.fromFloat location.lng
+                                            ++ ". Make it funny, and engaging with landmarks or geographical features if recognizable. Make him recognizable as an airline pilot working for KLM. "
+                                            ++ "If the location is clearly in the middle of a sea or the ocean, create something funny and possibly disturbing. He might've crashed his plane or parachuted on a boat. "
+                                            ++ "If the location's in The Netherlands, try and use something specific from the city/town he's in. "
+
+                                    imageGenCmd =
+                                        generateImageForTelegram user.telegramUser.firstName imagePrompt
                                 in
-                                ( newModel
+                                ( model
                                 , [ broadcastGuessSubmitted guess model
-                                  , sendTelegramMessage { text = user.telegramUser.firstName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)" }
+                                  , imageGenCmd
                                   ]
                                     |> Cmd.batch
                                 )
@@ -758,3 +828,14 @@ getUserFromSession sessionId model =
 subscriptions : Model -> Sub BackendMsg
 subscriptions _ =
     Time.every 1000 Tick
+
+
+{-| Generate an image for Telegram using Gemini AI
+-}
+generateImageForTelegram : String -> String -> Cmd BackendMsg
+generateImageForTelegram userName prompt =
+    GeminiImageGen.generateFromImageAndText
+        Env.geminiConfig
+        Ray.base64
+        prompt
+        (GotImageGenerationResult userName)

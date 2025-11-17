@@ -106,6 +106,13 @@ type RoundStatus
     | Closed -- Round finished, showing results
 
 
+type alias ImageGenerationParams =
+    { numberOfImages : Int
+    , guidanceScale : Float
+    , seed : Maybe Int
+    }
+
+
 type Page
     = LoginPage
     | GamePage
@@ -183,6 +190,7 @@ type FrontendMsg
 type BackendMsg
     = NoOpBackendMsg
     | Tick Time.Posix
+    | GotImageGenerationResult String (Result Http.Error { images : List String, error : Maybe String }) -- userName, result
 
 
 
@@ -232,7 +240,7 @@ type ToFrontend
 
 initialLocation : Location
 initialLocation =
-    { lat = 51.5074, lng = -0.1278 }
+    { lat = 52.344006, lng = 5.626099 }
 
 
 
