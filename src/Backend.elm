@@ -575,7 +575,11 @@ handleSubmitGuess sessionId clientId location model =
                                     geocodeCmd =
                                         reverseGeocode user.telegramUser.firstName round.prompt location
                                 in
-                                ( newModel
+                                ( if Env.mode == Env.Development then
+                                    model
+
+                                  else
+                                    newModel
                                 , [ broadcastGuessSubmitted guess model
                                   , geocodeCmd
                                   ]
