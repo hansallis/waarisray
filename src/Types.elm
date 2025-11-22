@@ -155,6 +155,7 @@ type alias BackendModel =
     , failedAuthentications : List String
     , now : Time.Posix
     , seed : Random.Seed
+    , evergreenTrigger : List ()
     }
 
 

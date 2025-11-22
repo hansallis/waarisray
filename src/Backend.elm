@@ -47,6 +47,7 @@ init =
       , failedAuthentications = []
       , now = Time.millisToPosix 0
       , seed = Random.initialSeed 0
+      , evergreenTrigger = []
       }
     , Cmd.none
     )
