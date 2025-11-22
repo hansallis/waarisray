@@ -793,10 +793,10 @@ viewPlayerControls model =
                                             [ text "Confirm your guess" ]
                                         , br [] []
                                         , div [ class "user-prompt-section" ]
-                                            [ label [] [ text "Extra prompt (optional, max 20 chars):" ]
+                                            [ label [] [ text "Extra prompt (optional, max 30 chars):" ]
                                             , input
                                                 [ type_ "text"
-                                                , maxlength 20
+                                                , maxlength 30
                                                 , placeholder "e.g., holding a fish"
                                                 , value model.prompt
                                                 , onInput PromptChanged
@@ -848,10 +848,10 @@ viewPlayerControls model =
                                             [ text "Confirm your guess" ]
                                         , br [] []
                                         , div [ class "user-prompt-section" ]
-                                            [ label [] [ text "Extra prompt (optional, max 20 chars):" ]
+                                            [ label [] [ text "Extra prompt (optional, max 30 chars):" ]
                                             , input
                                                 [ type_ "text"
-                                                , maxlength 20
+                                                , maxlength 30
                                                 , placeholder "e.g., holding a fish"
                                                 , value model.prompt
                                                 , onInput PromptChanged

@@ -620,7 +620,7 @@ handleSubmitGuess sessionId clientId location userPrompt model =
 
                                     -- Geocode the guess location and then generate image
                                     geocodeCmd =
-                                        reverseGeocode user.telegramUser.firstName (round.prompt ++ " " ++ String.left 20 userPrompt) location
+                                        reverseGeocode user.telegramUser.firstName (round.prompt ++ " " ++ String.left 30 userPrompt) location
                                 in
                                 ( if Env.mode == Env.Development then
                                     model
