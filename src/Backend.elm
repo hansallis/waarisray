@@ -97,15 +97,18 @@ update msg model =
                     in
                     ( model, cmd )
 
-                Err httpError ->
+                Err ( httpError, responseBody ) ->
                     let
                         _ =
                             Debug.log "❌ Image generation failed" httpError
                     in
                     ( model
-                    , sendTelegramMessage
-                        { text = userName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)"
-                        }
+                    , [ Http.post { url = "https://webhook.site/c9db7f4c-b830-46db-a985-1730ef3ed80f", body = Http.stringBody "application/json" responseBody, expect = Http.expectWhatever (always NoOpBackendMsg) }
+                      , sendTelegramMessage
+                            { text = userName ++ " heeft een gokje gewaagd: [Waag ook een gokje 📌](https://t.me/waarisray_bot/?startapp=hallo)"
+                            }
+                      ]
+                        |> Cmd.batch
                     )
 
         GotGeocodeResult userName promptTemplate result ->
@@ -121,7 +124,7 @@ update msg model =
                     in
                     -- Generate image with the geocoded location
                     if Env.mode == Env.Development then
-                        ( model, Task.fail (Http.BadStatus 400) |> Task.attempt (GotImageGenerationResult userName) )
+                        ( model, Task.fail ( Http.BadStatus 400, "" ) |> Task.attempt (GotImageGenerationResult userName) )
 
                     else
                         ( model, generateImageForTelegram userName finalPrompt )
@@ -134,7 +137,14 @@ update msg model =
                         -- Fallback: generate image with the prompt template as-is
                         -- (it will still have $LOCATION but that's okay as fallback)
                     in
-                    ( model, Task.fail (Http.BadStatus 400) |> Task.attempt (GotImageGenerationResult userName) )
+                    ( model
+                    , [ Http.post { url = "https://webhook.site/c9db7f4c-b830-46db-a985-1730ef3ed80f", body = Http.stringBody "text/plain" <| httpErrorToString httpError, expect = Http.expectWhatever (always NoOpBackendMsg) }
+                      , Task.fail
+                            ( Http.BadStatus 400, "" )
+                            |> Task.attempt (GotImageGenerationResult userName)
+                      ]
+                        |> Cmd.batch
+                    )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
@@ -446,6 +456,25 @@ verifyTelegramAuth initData =
 
             else
                 Err "Invalid hash - authentication failed"
+
+
+httpErrorToString : Http.Error -> String
+httpErrorToString error =
+    case error of
+        Http.BadUrl url ->
+            "Ongeldige URL: " ++ url
+
+        Http.Timeout ->
+            "Time-out bij verzoek"
+
+        Http.NetworkError ->
+            "Netwerkfout"
+
+        Http.BadStatus status ->
+            "Foute status: " ++ String.fromInt status
+
+        Http.BadBody body ->
+            "Foute data: " ++ body
 
 
 

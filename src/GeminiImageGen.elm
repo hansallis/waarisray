@@ -57,7 +57,7 @@ generateFromImageAndText :
     Config
     -> List String
     -> String
-    -> (Result Http.Error GenerationResult -> msg)
+    -> (Result ( Http.Error, String ) GenerationResult -> msg)
     -> Cmd msg
 generateFromImageAndText config base64Images prompt toMsg =
     let
@@ -75,10 +75,38 @@ generateFromImageAndText config base64Images prompt toMsg =
             ]
         , url = url
         , body = body
-        , expect = Http.expectJson toMsg responseDecoder
+        , expect = expectJsonWithBody toMsg responseDecoder
         , timeout = Just 60000 -- 60 seconds
         , tracker = Nothing
         }
+
+
+{-| Custom expect that captures the response body even on errors
+-}
+expectJsonWithBody : (Result ( Http.Error, String ) a -> msg) -> Decode.Decoder a -> Http.Expect msg
+expectJsonWithBody toMsg decoder =
+    Http.expectStringResponse toMsg <|
+        \response ->
+            case response of
+                Http.BadUrl_ url ->
+                    Err ( Http.BadUrl url, "" )
+
+                Http.Timeout_ ->
+                    Err ( Http.Timeout, "" )
+
+                Http.NetworkError_ ->
+                    Err ( Http.NetworkError, "" )
+
+                Http.BadStatus_ metadata body ->
+                    Err ( Http.BadStatus metadata.statusCode, body )
+
+                Http.GoodStatus_ _ body ->
+                    case Decode.decodeString decoder body of
+                        Ok value ->
+                            Ok value
+
+                        Err err ->
+                            Err ( Http.BadBody (Decode.errorToString err), body )
 
 
 {-| Build the Gemini API URL
