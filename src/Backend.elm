@@ -832,6 +832,9 @@ handleRequestGameState sessionId clientId model =
                 else if usersGuess == Nothing then
                     currentRound |> Maybe.map (fullyCensorRound >> Censored)
 
+                else if currentRound |> Maybe.map (.isOpen >> not) |> Maybe.withDefault False then
+                    currentRound |> Maybe.map Uncensored
+
                 else
                     currentRound |> Maybe.map (censorRound >> Censored)
             , usersGuess =
